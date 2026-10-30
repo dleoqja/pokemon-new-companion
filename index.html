@@ -4111,6 +4111,17 @@ function dropSpot(x,y){
   return null;
 }
 function groundPut(x,y,b){ const sp0=dropSpot(x,y); if(!sp0) return false; items.push({x:sp0[0],y:sp0[1],b}); if(mp) mpSend({t:'items',fl:floor,l:items.map(itemOut)}); return true; }
+// 놓아주는 포켓몬의 도구: 가방에 넣고, 가방이 꽉 찼으면 숲 바닥(작은 숲이면 샛길 앞)에 떨군다. 메시지 뒤에 붙일 문장을 돌려준다
+function keepHeld(o){
+  const id=o.item; if(!id) return ''; delete o.item; const I=itemName(id);
+  if(invAdd(id)) return ` ${josa(I,'은/는')} 가방에 넣었다.`;
+  const [x,y]=room?room.back:player?[player.x,player.y]:[0,0];
+  if(player&&onFloor===floor&&dropSpot(x,y)){
+    if(mp&&!isHost()) fhSend({t:'drop',x,y,b:id}); else groundPut(x,y,id);
+    return ` 가방이 꽉 차서 ${josa(I,'을/를')} 바닥에 떨궜다.`;
+  }
+  return ` 가방이 꽉 차고 떨굴 자리도 없어서 ${josa(I,'은/는')} 놓아준 포켓몬이 가져갔다.`;
+}
 function dropToGround(i){
   const id=bag.inv[i];
   if(!id||mode!=='world'||onFloor!==floor||!player){ toast('숲 바닥에서만 떨굴 수 있다'); return; }
@@ -5462,7 +5473,7 @@ function recruit(e){
         <span class="lbl">새 동료</span><div class="big">${sprHTML(e.id,e.sh)}<div><b>${N}${gIcon(e)}${star(e)}</b><span class="lv">Lv${e.lv}</span><div class="chips">${chips(e.id)}</div></div></div>
         <div class="row-btns"><button class="btn" id="rsNo" type="button">아니요</button><button class="btn go" id="rsYes" type="button">네</button></div>`);
       $('rsNo').onclick=release;
-      $('rsYes').onclick=()=>{ party.splice(i,1); join(`잘 가, ${O}! ${josa(N,'이/가')} 동료가 되었다!`); };
+      $('rsYes').onclick=()=>{ const it=keepHeld(o); party.splice(i,1); join(`잘 가, ${O}! ${josa(N,'이/가')} 동료가 되었다!${it}`); };
     };
     ask();
   });

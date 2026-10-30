@@ -186,6 +186,7 @@ button:focus-visible,canvas:focus-visible{outline:3px solid #fff;outline-offset:
 .mvw{position:relative;display:flex;min-width:0}
 .mvw .mv{flex:1;min-width:0}
 .mv .mn{padding-right:24px}
+.bwf{position:absolute;right:31px;top:5px;z-index:1;width:24px;height:24px;border-radius:50%;border:2px solid #000;background:#f4f7f5 url(it/bewear-face.png) center/20px no-repeat;image-rendering:pixelated;pointer-events:none}
 .qb{position:absolute;right:5px;top:5px;z-index:1;width:24px;height:24px;padding:0;border-radius:50%;border:2px solid #000;background:rgba(244,247,245,.92);color:var(--ink);font-size:14px;line-height:1;display:grid;place-items:center}
 .qb:active{transform:translateY(1px)}
 .mv .ef.up,.sub .ef.up{background:#fff;color:#b8241a}
@@ -1367,7 +1368,7 @@ function myState(){
 }
 // 내 위치를 보낸다 (바뀌었을 때 + 1.5초마다)
 let lastMe='', lastMeT=0, lastPty='', lastPtyT=0;
-const ptyOut=()=>(DUEL?DUEL.real:party).map(m=>{ const o={id:m.id,lv:m.lv,sh:!!m.sh,g:m.g,hp:m.hp,exp:m.exp,moves:m.moves,abs:m.abs,nat:m.nat,fr:m.fr}; if(m.nick) o.nick=m.nick; if(m.item) o.item=m.item; if(m.gmax) o.gmax=1; if(m.dx) o.dx=1; if(m.st) o.st=m.st; if(m.pp) o.pp=m.pp; return o; });
+const ptyOut=()=>(DUEL?DUEL.real:party).map(m=>{ const o={id:m.id,lv:m.lv,sh:!!m.sh,g:m.g,hp:m.hp,exp:m.exp,moves:m.moves,abs:m.abs,nat:m.nat,fr:m.fr}; if(m.nick) o.nick=m.nick; if(m.item) o.item=m.item; if(m.gmax) o.gmax=1; if(m.dx) o.dx=1; if(m.bw) o.bw=m.bw; if(m.st) o.st=m.st; if(m.pp) o.pp=m.pp; return o; });
 function mpTick(t){
   if(!mp||!player) return;
   // 연결이 끊기는 중인데 알림이 안 오는 경우도 있어서 직접 확인한다
@@ -1810,8 +1811,9 @@ function mvHTML(mid,attrs='',tag='',maxOf=null,mon=null){
   const m=MV[mid], nmv=maxOf?maxName(maxOf,m):m.n;
   const full=mon&&mon.v&&mon.v.tf?5:ppMax(mid), left=mon?ppLeft(mon,mid):full;
   const pp=mid===STRUGGLE?'<span></span>':`<span class="pp ${left===0?'zero':left*4<=full?'low':''}">PP ${left}/${full}</span>`;
+  const bw=mon&&mon.bw&&mon.bw.includes(mid)?'<span class="bwf" title="이븐곰에게 배운 기술" aria-label="이븐곰에게 배운 기술"></span>':'';  // 이븐곰의 집에서 배운 기술
   return `<div class="mvw"><button class="mv" type="button" data-m="${mid}" style="--tc:${TY[m.t][1]};--tx:${LIGHT.has(m.t)?'#18212a':'#fff'}" ${attrs}>
-      ${tag}<span class="mn">${nmv}</span><span class="meta"><span>${TY[m.t][0]} · ${CAT[m.c]}${m.c!=='x'?` · <b class="pw">${maxOf?maxPow(maxOf,m):m.p||'-'}</b>`:''}</span>${pp}</span></button><button class="qb" type="button" data-q="${mid}" ${maxOf?'data-x="1"':''} aria-label="${nmv} 설명">?</button></div>`;
+      ${tag}<span class="mn">${nmv}</span><span class="meta"><span>${TY[m.t][0]} · ${CAT[m.c]}${m.c!=='x'?` · <b class="pw">${maxOf?maxPow(maxOf,m):m.p||'-'}</b>`:''}</span>${pp}</span></button><button class="qb" type="button" data-q="${mid}" ${maxOf?'data-x="1"':''} aria-label="${nmv} 설명">?</button>${bw}</div>`;
 }
 const CAT={p:'물리',s:'특수',x:'변화'};
 function renderCmd(){
@@ -6788,7 +6790,7 @@ function houseSure(a,mid,j){
     const g=room.g; closeOv(); room.cd=1500;
     say(`이븐곰이 ${nm(A)}의 ${josa(MV[mid].n,'을/를')} 흉내 내며 ${nm(B)}에게 열심히 가르친다…`); await wait(1400);
     await learnMove(B,mid);
-    if(B.moves.includes(mid)){ (bag.hb||(bag.hb=[])).push(g.seed); saveRun(); say(`이븐곰이 뿌듯하게 ${josa(nm(B),'을/를')} 끌어안았다! (이 집에서는 더 가르쳐 주지 않는다)`); }
+    if(B.moves.includes(mid)){ (bag.hb||(bag.hb=[])).push(g.seed); B.bw=[...new Set([...(B.bw||[]),mid])]; saveRun(); say(`이븐곰이 뿌듯하게 ${josa(nm(B),'을/를')} 끌어안았다! (이 집에서는 더 가르쳐 주지 않는다)`); }
     else say('이븐곰은 아쉬워하면서도 다음에 또 오라는 듯 손을 흔든다.');
     if(mode==='room') whud();
   };
@@ -7479,7 +7481,7 @@ buildTiles();
 party=[makeMon(25,5)]; genMap(); spawn(); placePlayer(); setMode('world'); mode='title'; say('');
 requestAnimationFrame(loop);
 function fusionTest(){
-  party=[646,644,643,800,791,792].map(id=>makeMon(id,70)); party.forEach(x=>x.fr=0);
+  party=[646,644,643,800,791,792].map(id=>makeMon(id,70)); party.forEach(x=>x.fr=0); party[0].moves[3]=7; party[0].bw=[7];  // 큐레무가 이븐곰에게 불꽃펀치를 배운 셈
   bag={band:false,inv:['dna-splicers','n-solarizer','n-lunarizer']}; cleared=false; act=0; floor=1; reached=1; winsFloor=0; wins=0;
   genMap(); spawn(); placePlayer(); onFloor=floor; setMode('world'); draw(); toast('합체 시험');
   say('시험: 큐레무·제크로무·레시라무·네크로즈마·솔가레오·루나아라 Lv70과 유전자쐐기·네크로플러스솔·네크로플러스루나. 가방에서 써 봐.');

@@ -20,14 +20,12 @@ export class Room {
     if (req.headers.get('Upgrade') !== 'websocket') return new Response('websocket only', { status: 426 });
     const q = new URL(req.url).searchParams;
     const sid = (q.get('sid') || '').slice(0, 32);
-    // 로그인한 사람(tk)은 이름이 계정 아이디로 고정된다. 손님이 계정 아이디와 같은 이름을 쓰면 뒤에 '(손님)'을 붙인다
+    // 로그인한 사람(tk)은 이름이 계정 닉네임이 된다(서버가 확인). 손님이 계정 닉네임과 같은 이름을 쓰면 뒤에 '(손님)'을 붙인다
     let name = (q.get('name') || '트레이너').slice(0, 12), acct = false;
+    const tk = q.get('tk') || '';
     try {
-      const tk = q.get('tk');
-      const r = await acctStub(this.env).fetch(tk ? new Request('https://acct/api/me', { headers: { Authorization: 'Bearer ' + tk } })
-        : new Request('https://acct/api/exists?id=' + encodeURIComponent(name)));
-      const j = r.ok ? await r.json() : null;
-      if (tk && j && j.id) { name = j.id; acct = true; }
+      const j = tk ? await this.acctMe(tk) : await (await acctStub(this.env).fetch(new Request('https://acct/api/exists?id=' + encodeURIComponent(name)))).json();
+      if (tk && j && j.id) { name = j.nick; acct = true; }
       else if (!tk && j && j.exists) name = name.slice(0, 8) + '(손님)';
     } catch (_) {}
     // 같은 사람(같은 탭)이 다시 들어오면 남아 있던 옛 연결을 먼저 뺀다
@@ -37,7 +35,7 @@ export class Room {
     const [client, ws] = Object.values(new WebSocketPair());
     ws.accept();
     const id = crypto.randomUUID().slice(0, 8);
-    this.peers.set(id, { ws, name, sid, seen: Date.now(), acct });
+    this.peers.set(id, { ws, name, sid, seen: Date.now(), acct, tk: acct ? tk : '' });
     if (!this.host) this.host = id;
     this.send(ws, { t: 'hello', id, name, host: this.host, peers: this.list() });
     this.broadcast({ t: 'join', id, name, host: this.host, peers: this.list() }, id);
@@ -48,6 +46,10 @@ export class Room {
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  async acctMe(tk) {
+    const r = await acctStub(this.env).fetch(new Request('https://acct/api/me', { headers: { Authorization: 'Bearer ' + tk } }));
+    return r.ok ? r.json() : null;
+  }
   list() { return [...this.peers].map(([id, p]) => ({ id, name: p.name, acct: p.acct || undefined })); }
   send(ws, msg) { try { ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg)); } catch (_) {} }
   broadcast(msg, except) {
@@ -69,7 +71,7 @@ export class Room {
     this.leave(id);
   }
 
-  onMessage(from, data) {
+  async onMessage(from, data) {
     const me = this.peers.get(from);
     if (!me) return;
     me.seen = Date.now();
@@ -88,10 +90,10 @@ export class Room {
       this.drop(m.to, 4001, 'kicked');
       return;
     }
-    // 이름 바꾸기: 목록의 이름도 바꿔서 나중에 들어온 사람에게도 새 이름 (계정 이름은 못 바꾼다)
+    // 이름 바꾸기: 목록의 이름도 바꿔서 나중에 들어온 사람에게도 새 이름 (계정은 서버의 닉네임으로만)
     if (m.t === 'rename') {
-      if (me.acct) return;
-      me.name = String(m.name || '').slice(0, 12) || me.name;
+      if (me.acct) { try { const j = await this.acctMe(me.tk); if (!j || !j.nick) return; me.name = j.nick; } catch (_) { return; } }
+      else me.name = String(m.name || '').slice(0, 12) || me.name;
       this.broadcast({ t: 'rename', id: from, name: me.name, peers: this.list() }, from);
       return;
     }
@@ -117,6 +119,8 @@ const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')
 const sha = async s => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
 const rand = n => hex(crypto.getRandomValues(new Uint8Array(n)));
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json' } });
+// 닉네임: 앞뒤 공백·꺾쇠·따옴표·제어 문자를 빼고 1~8자
+const cleanNick = s => String(s || '').replace(/[<>"&'`\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 8);
 const bearer = req => (req.headers.get('Authorization') || '').replace(/^Bearer /, '');
 
 export class Accounts {
@@ -127,7 +131,11 @@ export class Accounts {
       CREATE TABLE IF NOT EXISTS saves(id TEXT, slot INTEGER, t INTEGER, data TEXT, PRIMARY KEY(id, slot));
       CREATE TABLE IF NOT EXISTS fails(id TEXT PRIMARY KEY, n INTEGER, until INTEGER);
       CREATE TABLE IF NOT EXISTS signups(ip TEXT, t INTEGER);`);
+    // 닉네임(대소문자 무시하고 겹치지 않게). 예전 계정은 닉네임이 없으면 아이디를 쓴다
+    if (!this.sql.exec('PRAGMA table_info(users)').toArray().some(c => c.name === 'nick')) this.sql.exec('ALTER TABLE users ADD COLUMN nick TEXT');
+    this.sql.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_nick ON users(nick COLLATE NOCASE)');
   }
+  nickTaken(nick, except) { const u = this.row('SELECT id FROM users WHERE (nick = ? COLLATE NOCASE OR (nick IS NULL AND id = ?)) AND id != ?', nick, nick.toLowerCase(), except || ''); return !!u; }
   row(q, ...a) { return this.sql.exec(q, ...a).toArray()[0] || null; }
   async session(id) {
     const tk = rand(32), now = Date.now();
@@ -143,32 +151,33 @@ export class Accounts {
     if (s.exp - Date.now() < SESSION_MS / 2) this.sql.exec('UPDATE sessions SET exp = ? WHERE th = ?', Date.now() + SESSION_MS, th);
     return s.id;
   }
-  me(id) { const u = this.row('SELECT id, best, clears FROM users WHERE id = ?', id); return u && { id: u.id, best: u.best, clears: u.clears }; }
+  me(id) { const u = this.row('SELECT id, nick, best, clears FROM users WHERE id = ?', id); return u && { id: u.id, nick: u.nick || u.id, best: u.best, clears: u.clears }; }
 
   async fetch(req) {
     const url = new URL(req.url), path = url.pathname.replace(/^\/api\//, ''), M = req.method, now = Date.now();
     const body = M === 'POST' || M === 'PUT' ? await req.json().catch(() => ({})) : {};
     // 손님 이름이 계정 아이디와 겹치는지 (방 서버만 묻는다)
-    if (path === 'exists') return json({ exists: !!this.row('SELECT 1 AS x FROM users WHERE id = ?', (url.searchParams.get('id') || '').toLowerCase()) });
+    if (path === 'exists') return json({ exists: this.nickTaken(url.searchParams.get('id') || '') });
     if (path === 'rank') {
-      const top = this.sql.exec('SELECT id, best, clears FROM users WHERE best > 0 ORDER BY best DESC, clears DESC, best_t ASC LIMIT 50').toArray();
+      const top = this.sql.exec('SELECT id, COALESCE(nick, id) AS nick, best, clears FROM users WHERE best > 0 ORDER BY best DESC, clears DESC, best_t ASC LIMIT 50').toArray();
       const id = await this.who(req);
       let mine = null;
       if (id) {
         const u = this.row('SELECT best, clears, best_t FROM users WHERE id = ?', id);
-        if (u && u.best > 0) mine = { id, best: u.best, clears: u.clears, rank: 1 + this.row(
+        if (u && u.best > 0) mine = { id, nick: this.me(id).nick, best: u.best, clears: u.clears, rank: 1 + this.row(
           'SELECT COUNT(*) AS n FROM users WHERE best > ? OR (best = ? AND (clears > ? OR (clears = ? AND best_t < ?)))', u.best, u.best, u.clears, u.clears, u.best_t).n };
       }
       return json({ top, mine });
     }
     if (path === 'signup' && M === 'POST') {
-      const id = String(body.id || ''), key = String(body.key || ''), ip = req.headers.get('X-IP') || '';
-      if (!ID_RE.test(id) || !KEY_RE.test(key)) return json({ err: 'bad' }, 400);
+      const id = String(body.id || ''), key = String(body.key || ''), nick = cleanNick(body.nick), ip = req.headers.get('X-IP') || '';
+      if (!ID_RE.test(id) || !KEY_RE.test(key) || !nick) return json({ err: 'bad' }, 400);
       if (this.row('SELECT 1 AS x FROM users WHERE id = ?', id)) return json({ err: 'taken' }, 409);
+      if (this.nickTaken(nick)) return json({ err: 'nick' }, 409);
       this.sql.exec('DELETE FROM signups WHERE t < ?', now - 3600e3);
       if (ip && this.row('SELECT COUNT(*) AS n FROM signups WHERE ip = ?', ip).n >= SIGNUP_PER_HOUR) return json({ err: 'slow' }, 429);
       const salt = rand(16);
-      this.sql.exec('INSERT INTO users(id, salt, hash, created) VALUES (?, ?, ?, ?)', id, salt, await sha(salt + key), now);
+      this.sql.exec('INSERT INTO users(id, salt, hash, created, nick) VALUES (?, ?, ?, ?, ?)', id, salt, await sha(salt + key), now, nick);
       if (ip) this.sql.exec('INSERT INTO signups VALUES (?, ?)', ip, now);
       return json({ token: await this.session(id), ...this.me(id) });
     }
@@ -191,6 +200,13 @@ export class Accounts {
     const id = await this.who(req);
     if (!id) return json({ err: 'auth' }, 401);
     if (path === 'me') return json(this.me(id));
+    if (path === 'nick' && M === 'POST') {
+      const nick = cleanNick(body.nick);
+      if (!nick) return json({ err: 'bad' }, 400);
+      if (this.nickTaken(nick, id)) return json({ err: 'nick' }, 409);
+      this.sql.exec('UPDATE users SET nick = ? WHERE id = ?', nick, id);
+      return json(this.me(id));
+    }
     if (path === 'logout' && M === 'POST') {
       this.sql.exec('DELETE FROM sessions WHERE th = ?', await sha(bearer(req)));
       return json({ ok: true });

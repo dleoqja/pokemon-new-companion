@@ -5656,14 +5656,14 @@ function viewParty(){
 // 멀티: 이름과 방 코드 (숫자 4자리)
 function openRoom(inGame){
   ov(`<h2>멀티</h2><p>같은 방 코드를 넣은 사람끼리 같은 숲을 함께 탐험해. (최대 4명)</p>
-    <label class="lbl" for="mpName">이름</label><input class="inp" id="mpName" maxlength="8" autocomplete="off"${AUTH?' readonly':''} value="${AUTH?AUTH.id:(store('kr-name')||'트레이너'+(100+rnd(900))).replace(/[<>"&]/g,'')}">${AUTH?'<p class="note">로그인해서 이름이 아이디로 나온다.</p>':''}
+    <label class="lbl" for="mpName">이름</label><input class="inp" id="mpName" maxlength="8" autocomplete="off"${AUTH?' readonly':''} value="${AUTH?escN(AUTH.nick||AUTH.id):(store('kr-name')||'트레이너'+(100+rnd(900))).replace(/[<>"&]/g,'')}">${AUTH?'<p class="note">로그인해서 이름이 닉네임으로 나온다(설정에서 바꿀 수 있다).</p>':''}
     <div class="row-btns"><button class="btn go" id="mpNew" type="button">새 방 만들기</button></div>
     <label class="lbl" for="mpCode">방 코드로 들어가기</label>
     <div class="row-btns"><input class="inp" id="mpCode" maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="예: 4821" value="${/^\d{4}$/.test(store('kr-room')||'')?store('kr-room'):''}"><button class="btn" id="mpJoin" type="button">들어가기</button></div>
     ${inGame?'<p class="note">지금 파티와 층 그대로 들어간다.</p>':''}<p class="note" id="mpErr"></p>
     <div class="row-btns"><button class="btn" id="mpBack" type="button">뒤로</button></div>`,inGame?'room':'title');
   const go=async code=>{
-    const name=AUTH?AUTH.id:$('mpName').value.trim().slice(0,8)||'트레이너'; if(!AUTH) store('kr-name',name); $('mpErr').textContent='연결하는 중…';
+    const name=AUTH?AUTH.nick||AUTH.id:$('mpName').value.trim().slice(0,8)||'트레이너'; if(!AUTH) store('kr-name',name); $('mpErr').textContent='연결하는 중…';
     try{ await mpConnect(code,name); store('kr-room',code); mpTag(); if(inGame){ closeOv(); mpJoinMid(); } else showStart(); toast(`방 ${code}에 들어왔다`); }
     catch(_){ $('mpErr').textContent='방에 들어가지 못했어. 코드를 확인하거나(방이 가득 찼을 수도 있어) 잠시 뒤에 다시 해 줘.'; }
   };
@@ -5788,15 +5788,17 @@ async function sendRec1(){
 }
 setInterval(()=>{ if(AUTH&&Object.keys(jget(pendKey(),{})).length) syncUp(); },30000);
 // 켤 때: 토큰이 아직 살아 있는지 보고, 못 보낸 기록·저장을 올린다
-if(AUTH) api('GET','me').then(r=>{ if(r.ok&&AUTH){ Object.assign(AUTH,{best:r.j.best,clears:r.j.clears}); setAuth(AUTH); sendRec(); syncUp(); } }).catch(()=>{});
+if(AUTH) api('GET','me').then(r=>{ if(r.ok&&AUTH){ Object.assign(AUTH,{nick:r.j.nick,best:r.j.best,clears:r.j.clears}); setAuth(AUTH); sendRec(); syncUp(); } }).catch(()=>{});
 
 const ID_OK=/^[a-z0-9_]{3,12}$/;
+const cleanAcNick=s=>String(s||'').replace(/[<>"&'`\u0000-\u001f\u007f]/g,'').replace(/\s+/g,' ').trim().slice(0,8);
+const NICK_ERR={nick:'이미 누가 쓰는 닉네임이야.',bad:'닉네임은 1~8자야(꺾쇠·따옴표는 못 쓴다).'};
 function openAccount(signup=false){
   if(AUTH){
     ov(`<h2>계정</h2>
-      <div class="ab-box"><span class="lbl">아이디</span><p><b>${AUTH.id}</b></p>
+      <div class="ab-box"><span class="lbl">닉네임</span><p><b>${AUTH.nick||AUTH.id}</b> <small>(아이디 ${AUTH.id})</small></p>
         <p>최고 기록 ${AUTH.best||0}층 · 클리어 ${AUTH.clears||0}번</p></div>
-      <p class="note">저장 칸 5개가 계정에 저장돼서 다른 기기에서 로그인해도 이어서 할 수 있다. 멀티에서는 이름이 아이디로 나온다.</p>
+      <p class="note">저장 칸 5개가 계정에 저장돼서 다른 기기에서 로그인해도 이어서 할 수 있다. 멀티와 랭킹에는 닉네임이 나온다. 닉네임은 설정에서 바꿀 수 있다.</p>
       <p class="note" id="acErr"></p>
       <div class="row-btns"><button class="btn" id="acRank" type="button">랭킹</button><button class="btn" id="acOut" type="button">로그아웃</button></div>
       <div class="row-btns"><button class="btn go" id="acBack" type="button">뒤로</button></div>`,'title');
@@ -5812,8 +5814,9 @@ function openAccount(signup=false){
     return;
   }
   ov(`<h2>${signup?'회원가입':'로그인'}</h2>
-    <p class="note">로그인하면 저장 칸이 계정에 저장되고(다른 기기에서도 이어하기), 멀티 이름이 아이디로 고정되고, 랭킹에 기록이 올라간다. 로그인하지 않아도 게임은 그대로 할 수 있다.</p>
+    <p class="note">로그인하면 저장 칸이 계정에 저장되고(다른 기기에서도 이어하기), 멀티 이름이 닉네임으로 고정되고, 랭킹에 기록이 올라간다. 로그인하지 않아도 게임은 그대로 할 수 있다.${signup?' 지금까지 한 저장 칸과 기록은 가입하면 계정에 그대로 저장된다.':''}</p>
     <label class="lbl" for="acId">아이디</label><input class="inp" id="acId" maxlength="12" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="영어 소문자·숫자·_ 3~12자">
+    ${signup?`<label class="lbl" for="acNick">닉네임</label><input class="inp" id="acNick" maxlength="8" autocomplete="nickname" placeholder="멀티·랭킹에 보이는 이름, 1~8자">`:''}
     <label class="lbl" for="acPw">비밀번호</label><input class="inp" id="acPw" type="password" maxlength="64" autocomplete="${signup?'new-password':'current-password'}" placeholder="6자 이상">
     ${signup?`<label class="lbl" for="acPw2">비밀번호 확인</label><input class="inp" id="acPw2" type="password" maxlength="64" autocomplete="new-password">
       <p class="note warn">비밀번호를 잊으면 찾을 수 없어(이메일을 받지 않는다). 다른 사이트에서 쓰는 비밀번호는 쓰지 마.</p>`:''}
@@ -5824,20 +5827,24 @@ function openAccount(signup=false){
   $('acBack').onclick=showStart;
   const err=s=>{ $('acErr').textContent=s; $('acGo').disabled=false; };
   const go=async()=>{
-    const id=$('acId').value.trim().toLowerCase(), pw=$('acPw').value;
+    const id=$('acId').value.trim().toLowerCase(), pw=$('acPw').value, nick=signup?cleanAcNick($('acNick').value):'';
     if(!ID_OK.test(id)) return err('아이디는 영어 소문자·숫자·_ 로 3~12자야.');
+    if(signup&&!nick) return err(NICK_ERR.bad);
     if(pw.length<6) return err('비밀번호는 6자 이상이야.');
     if(signup&&pw!==$('acPw2').value) return err('비밀번호 확인이 달라.');
     $('acGo').disabled=true; $('acErr').textContent='잠깐만…';
-    let r; try{ r=await api('POST',signup?'signup':'login',{id,key:await pwKey(id,pw)}); }catch(_){ return err('서버에 연결하지 못했어. 인터넷을 확인해 줘.'); }
-    if(!r.ok) return err({taken:'이미 있는 아이디야.',wrong:'아이디나 비밀번호가 틀렸어.',slow:'가입을 너무 많이 했어. 조금 뒤에 다시 해 줘.',bad:'아이디나 비밀번호 형식이 맞지 않아.'}[r.j.err]||(r.j.err==='locked'?`비밀번호를 여러 번 틀렸어. ${r.j.wait}분 뒤에 다시 해 줘.`:'잠시 뒤에 다시 해 줘.'));
+    let r; try{ r=await api('POST',signup?'signup':'login',{id,nick,key:await pwKey(id,pw)}); }catch(_){ return err('서버에 연결하지 못했어. 인터넷을 확인해 줘.'); }
+    if(!r.ok) return err({taken:'이미 있는 아이디야.',nick:NICK_ERR.nick,wrong:'아이디나 비밀번호가 틀렸어.',slow:'가입을 너무 많이 했어. 조금 뒤에 다시 해 줘.',bad:'아이디·닉네임·비밀번호 형식이 맞지 않아.'}[r.j.err]||(r.j.err==='locked'?`비밀번호를 여러 번 틀렸어. ${r.j.wait}분 뒤에 다시 해 줘.`:'잠시 뒤에 다시 해 줘.'));
     const guest=allRuns();  // 로그인 전(손님) 저장 칸
-    setAuth({id:r.j.id,token:r.j.token,best:r.j.best,clears:r.j.clears}); useSlot(0);
+    const gBest=best, gClear=store('kr2-clear')==='1';  // 손님일 때의 기록(이 기기)
+    setAuth({id:r.j.id,nick:r.j.nick,token:r.j.token,best:r.j.best,clears:r.j.clears}); useSlot(0);
+    // 가입: 지금까지 한 손님 저장 칸과 기록을 묻지 않고 계정에 그대로 저장한다
+    if(signup){ guest.forEach((s,i)=>{ if(!s) return; s.t=Date.now(); try{ localStorage.setItem(runKey(i),JSON.stringify(s)); }catch(_){} markPend(i,s.t); }); if(gBest>1) recordFloor(gBest); if(gClear) recordClear(); }
     $('acErr').textContent='저장 칸을 받는 중…';
     await syncDown(); sendRec();
-    toast(signup?`${id}로 가입했다`:`${id}로 로그인했다`,1600);
+    toast(signup?`${r.j.nick}(으)로 가입했다${guest.some(Boolean)?' · 저장 칸도 계정에 저장했다':''}`:`${r.j.nick}(으)로 로그인했다`,1800);
     // 계정에 저장이 없고 이 기기에 손님 저장이 있으면 가져올지 묻는다
-    if(guest.some(Boolean)&&!allRuns().some(Boolean)){
+    if(!signup&&guest.some(Boolean)&&!allRuns().some(Boolean)){
       ov(`<h2>저장 칸을 가져올까?</h2><p>이 기기에 로그인하기 전의 저장 칸이 있어. 계정으로 가져올까? (원래 칸은 그대로 남는다)</p>
         <div class="slots">${guest.map((s,i)=>s?`<div class="btn slt" style="pointer-events:none"><span class="slt-n">${i+1}</span>${slotLine(s)}</div>`:'').join('')}</div>
         <div class="row-btns"><button class="btn" id="imNo" type="button">아니요</button><button class="btn go" id="imYes" type="button">가져온다</button></div>`,'title');
@@ -5856,7 +5863,7 @@ async function openRank(back=showStart){
   let r; try{ r=await api('GET','rank'); }catch(_){ r=null; }
   if(!$('rkList')) return;
   if(!r||!r.ok){ $('rkMsg').textContent='서버에 연결하지 못했어.'; return; }
-  const {top,mine}=r.j, row=(n,u,me)=>`<div class="rk${me?' me':''}"><span class="rk-n">${n}</span><span class="rk-id">${u.id}</span><span class="rk-v">${u.best}층${u.clears?` · 클리어 ${u.clears}`:''}</span></div>`;
+  const {top,mine}=r.j, row=(n,u,me)=>`<div class="rk${me?' me':''}"><span class="rk-n">${n}</span><span class="rk-id">${escN(u.nick||u.id)}</span><span class="rk-v">${u.best}층${u.clears?` · 클리어 ${u.clears}`:''}</span></div>`;
   $('rkMsg').textContent=AUTH?'최고 층이 높은 순 (같으면 클리어가 많은 순, 그다음 먼저 닿은 순)':'로그인하면 내 기록도 올라간다. 최고 층이 높은 순.';
   $('rkList').innerHTML=(top.length?top.map((u,i)=>row(i+1,u,AUTH&&u.id===AUTH.id)).join(''):'<p class="note">아직 기록이 없다.</p>')
     +(mine&&!top.some(u=>u.id===mine.id)?`<p class="note">내 순위</p>${row(mine.rank,mine,true)}`:'');
@@ -7076,7 +7083,7 @@ const HELP=[
     ['숲',['풀숲을 걸으면 가끔 야생 포켓몬이 튀어나온다. 돌아다니는 야생 포켓몬에 닿아도 배틀이 시작된다.','위쪽 출구는 <b>보스</b>가 막고 있다. 보스를 이기면 다음 층으로 갈 수 있다.','아래쪽 입구로 나가면 지나온 층으로 내려간다.','새 층에 처음 오면 파티의 HP·PP·상태이상이 모두 회복된다. 바닥의 회복약은 HP와 상태이상을 회복한다.','야생에서는 전설·환상 포켓몬이 나오지 않는다(10층부터 보스로만). 야생 이로치는 10%.']],
     ['레벨 제한',['지금 잡아야 할 보스 레벨 <b>+3</b>까지만 오른다. 제한에 닿으면 경험치가 더 쌓이지 않는다.','보스를 이기면 그 배틀의 경험치부터 다음 층 기준으로 풀린다.']],
     ['저장과 게임 오버',['숲에 있으면 자동으로 저장된다. 저장 칸은 5개이고, 시작 화면의 불러오기로 골라서 계속한다. 새 모험은 출발할 때 저장할 칸을 고른다.','배틀 도중 끄거나 새로고침하면 그 배틀 직전으로 돌아간다.','파티가 모두 쓰러지면 게임 오버. 1층부터 다시 시작한다.']],
-    ['계정',['로그인은 하지 않아도 된다. 시작 화면의 로그인에서 아이디와 비밀번호로 가입한다.','로그인하면 저장 칸 5개가 계정에 저장돼서 다른 기기에서 로그인해도 이어서 할 수 있다. 인터넷이 없을 때 한 것은 인터넷이 되면 올라간다.','멀티에서 이름이 아이디로 나오고(✓ 표시), 최고 층과 클리어 횟수가 랭킹에 올라간다.','비밀번호를 잊으면 찾을 수 없다. 다른 사이트에서 쓰는 비밀번호는 쓰지 말 것.']],
+    ['계정',['로그인은 하지 않아도 된다. 시작 화면의 로그인에서 아이디·닉네임·비밀번호로 가입한다. 가입하기 전에 하던 저장 칸과 기록은 가입하면 계정에 그대로 저장된다.','로그인하면 저장 칸 5개가 계정에 저장돼서 다른 기기에서 로그인해도 이어서 할 수 있다. 인터넷이 없을 때 한 것은 인터넷이 되면 올라간다.','멀티와 랭킹에는 닉네임이 나온다(멀티에서는 ✓ 표시). 닉네임은 설정에서 바꿀 수 있다.','비밀번호를 잊으면 찾을 수 없다. 다른 사이트에서 쓰는 비밀번호는 쓰지 말 것.']],
   ]],
   ['조작',[
     ['이동',['키보드: WASD 또는 방향키','휴대폰: 화면 십자키. 누른 채로 손가락을 미끄러뜨리면 방향이 바뀐다.']],
@@ -7205,7 +7212,7 @@ function showStart(){
     <div class="row-btns"><button class="btn go" id="spin" type="button">돌리기</button></div>
     <div class="row-btns"><button class="btn" id="mpBtn" type="button">${mp?`방 ${mp.code} · ${mp.peers.length}명 (나가기)`:'멀티 (방 코드)'}</button></div>
     <div class="row-btns"><button class="btn" id="helpBtn" type="button">도움말</button><button class="btn" id="optBtn" type="button">설정</button></div>
-    <div class="row-btns"><button class="btn" id="acctBtn" type="button">${AUTH?`계정 · ${AUTH.id}`:'로그인'}</button><button class="btn" id="rankBtn" type="button">랭킹</button></div>
+    <div class="row-btns"><button class="btn" id="acctBtn" type="button">${AUTH?`계정 · ${escN(AUTH.nick||AUTH.id)}`:'로그인'}</button><button class="btn" id="rankBtn" type="button">랭킹</button></div>
     <p class="credit">v${VER} · <button class="lnk" id="credBtn" type="button">에셋 출처</button></p>`,'title');
   $('mpBtn').onclick=()=>{ if(mp){ mpLeave(); showStart(); } else openRoom(); };
   $('helpBtn').onclick=()=>openHelp();
@@ -7310,11 +7317,20 @@ function openOpt(title=false){
     <div class="opt spd"><span><b>진행 속도</b><small>배틀 메시지와 연출이 빨라진다.</small></span><span class="seg">${[1,2,4].map(v=>`<button type="button" data-spd="${v}" aria-pressed="${SPEED===v}">x${v}</button>`).join('')}</span></div>
     ${OPT_LIST.map(([k,t,d])=>`<button class="opt" type="button" data-k="${k}" aria-pressed="${!!OPT[k]}"><span><b>${t}</b><small>${d}</small></span><i class="sw"></i></button>`).join('')}
     <div class="opt"><span><b>오프라인</b><small id="offTxt">${offlineTxt()}</small></span></div>
+    ${AUTH?`<div class="opt nm"><span><b>닉네임</b><small>멀티·랭킹에 보이는 이름 (8자까지, 다른 사람과 겹치면 안 된다)</small><span class="nmrow"><input class="inp" id="oNick" maxlength="8" autocomplete="off" value="${escN(AUTH.nick||AUTH.id)}"><button class="btn" id="oNickOk" type="button">바꾸기</button></span><small id="oNickErr" style="color:#ff9a8a"></small></span></div>`:''}
     ${mp&&!AUTH?`<div class="opt nm"><span><b>멀티 이름</b><small>방 사람들에게 보이는 이름 (8자까지)</small><span class="nmrow"><input class="inp" id="oName" maxlength="8" autocomplete="off" value="${(mp.name||'').replace(/[<>"&]/g,'')}"><button class="btn" id="oNameOk" type="button">바꾸기</button></span></span></div>`:''}</div>
     ${title?'':'<div class="row-btns"><button class="btn" id="oHelp" type="button">도움말</button><button class="btn" id="oQuit" type="button">나가기</button></div>'}
     <div class="row-btns"><button class="btn go" id="oClose" type="button">닫기</button></div>`,title?'title':'opt');
   $('sheet').querySelectorAll('.opt[data-k]').forEach(b=>b.onclick=()=>{ const k=b.dataset.k; OPT[k]=!OPT[k]; store('kr-opt',JSON.stringify(OPT)); b.setAttribute('aria-pressed',OPT[k]); if(k==='fx') REDUCED=OS_REDUCED||OPT.fx; });
   $('sheet').querySelectorAll('[data-spd]').forEach(b=>b.onclick=()=>{ SPEED=+b.dataset.spd; store('kr-spd',SPEED); $('sheet').querySelectorAll('[data-spd]').forEach(x=>x.setAttribute('aria-pressed',x===b)); });
+  if($('oNick')){ const inp=$('oNick'), ok=async()=>{
+      const n=cleanAcNick(inp.value); if(!n){ $('oNickErr').textContent=NICK_ERR.bad; return; } if(n===AUTH.nick) return;
+      $('oNickErr').textContent='바꾸는 중…'; let r; try{ r=await api('POST','nick',{nick:n}); }catch(_){ $('oNickErr').textContent='서버에 연결하지 못했어.'; return; }
+      if(!r.ok){ $('oNickErr').textContent=NICK_ERR[r.j.err]||'잠시 뒤에 다시 해 줘.'; return; }
+      AUTH.nick=r.j.nick; setAuth(AUTH); inp.value=AUTH.nick; $('oNickErr').textContent='';
+      if(mp){ mp.name=AUTH.nick; const me=mp.peers.find(p=>p.id===mp.id); if(me) me.name=AUTH.nick; mpSend({t:'rename',name:AUTH.nick}); }
+      toast(`닉네임을 ${AUTH.nick}(으)로 바꿨다`); };
+    $('oNickOk').onclick=ok; inp.addEventListener('keydown',ev=>{ ev.stopPropagation(); if(ev.isComposing) return; if(ev.key==='Enter'){ ev.preventDefault(); ok(); } }); }
   if($('oName')){ const inp=$('oName'), ok=()=>{ const n=inp.value.replace(/[<>"&]/g,'').trim().slice(0,8); if(!n||!mp) return; mpRename(n); inp.value=n; toast(`이름을 ${n}(으)로 바꿨다`); };
     $('oNameOk').onclick=ok; inp.addEventListener('keydown',ev=>{ ev.stopPropagation(); if(ev.isComposing) return; if(ev.key==='Enter'){ ev.preventDefault(); ok(); } }); }
   if(title){ $('oClose').onclick=showStart; return; }

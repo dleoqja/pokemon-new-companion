@@ -540,8 +540,8 @@ const EXTRA={[ETMAX]:{...MON[889],id:ETMAX,n:'무한다이맥스 무한다이노
 /* 합체 포켓몬(블랙·화이트큐레무, 황혼의갈기·새벽의날개 네크로즈마). 종족값·타입·특성은 PokéAPI 그대로, 도트는 tools/build_fusion.py(bt/x?10, ic/e{id}).
    base+mate를 도구(item)로 합친다. sw: 합체하면 바뀌는 기술 [합체 기술, 원래 기술], add: 기술 떠올리기에 더하는 기술 */
 const FUSE={
-  10022:{base:646,mate:644,item:'dna-splicers',n:'블랙큐레무',t:[16,15],s:[125,170,100,120,90,95],a:[164,0,0],w:3250,sw:[[553,549],[559,184]]},
-  10023:{base:646,mate:643,item:'dna-splicers',n:'화이트큐레무',t:[16,15],s:[125,120,90,170,100,95],a:[163,0,0],w:3250,sw:[[554,549],[558,184]]},
+  10022:{base:646,mate:644,item:'dna-splicers',wk:1,n:'블랙큐레무',t:[16,15],s:[125,170,100,120,90,95],a:[164,0,0],w:3250,sw:[[553,549],[559,184]]},
+  10023:{base:646,mate:643,item:'dna-splicers',wk:2,n:'화이트큐레무',t:[16,15],s:[125,120,90,170,100,95],a:[163,0,0],w:3250,sw:[[554,549],[558,184]]},
   10155:{base:800,mate:791,item:'n-solarizer',n:'황혼의갈기 네크로즈마',t:[14,9],s:[97,157,127,113,109,77],a:[232,0,0],w:4600,sw:[],add:[713]},
   10156:{base:800,mate:792,item:'n-lunarizer',n:'새벽의날개 네크로즈마',t:[14,8],s:[97,113,109,157,127,77],a:[232,0,0],w:3500,sw:[],add:[714]},
 };
@@ -1529,8 +1529,13 @@ function tickEnts(dt){
 const fieldSpr={};
 function fieldSprite(id,sh){ const k=id+(sh?'s':''); if(fieldSpr[k]===undefined){ fieldSpr[k]=null; getSprite(id,false,sh).then(v=>fieldSpr[k]=v).catch(()=>{}); } return fieldSpr[k]; }
 function drawMon(id,sh,x,y,dir,frame,alpha){
+  // 합체 포켓몬: 큐레무는 wk/fuse.png(FUSE의 wk번째 칸), 네크로즈마는 걷기 도트가 없어서 합친 상대(솔가레오·루나아라) 것
+  if(FUSE[id]&&!FUSE[id].wk) id=FUSE[id].mate;
+  const big=id>=10000&&!FUSE[id];
   cx.globalAlpha=alpha==null?1:alpha;
-  cx.fillStyle='rgba(0,0,0,.22)'; cx.beginPath(); cx.ellipse(x+12,y+21,id>=10000?13:8,id>=10000?4:3,0,0,7); cx.fill();
+  cx.fillStyle='rgba(0,0,0,.22)'; cx.beginPath(); cx.ellipse(x+12,y+21,big?13:8,big?4:3,0,0,7); cx.fill();
+  if(FUSE[id]){ const img=loadImg('wk/fuse.png');
+    if(img.complete&&img.naturalWidth){ cx.drawImage(img,(FUSE[id].wk-1)*4*48+frame*48,dir*48,48,48,Math.round(x-12),Math.round(y-24),48,48); cx.globalAlpha=1; return; } }
   if(id>=10000){
     const v=fieldSprite(id,sh);
     if(v){ let t=animClock%v.total, fi=0; while(fi<v.n-1&&t>=v.d[fi]){t-=v.d[fi];fi++;}
@@ -7498,7 +7503,7 @@ function preloadList(){
     ...[...Object.keys(ITEMS),'band','soup','meteor'].map(k=>`it/${k}.png`),
     ...FX_FILES.map(f=>`fx/${f}.png`),
     ...n(5).flatMap(i=>[`ic/f${i}.png`,`ic/s${i}.png`]),'ic/e10190.png','ic/e10190s.png',
-    ...n(9).flatMap(i=>[`wk/n${i}.png`,`wk/s${i}.png`])])];
+    ...n(9).flatMap(i=>[`wk/n${i}.png`,`wk/s${i}.png`]),'wk/fuse.png'])];
 }
 function preload(){
   return new Promise(res=>{

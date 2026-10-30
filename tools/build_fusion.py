@@ -68,6 +68,35 @@ def prism(path, core, glow, mark):
         d.ellipse([12 * S, 15 * S, 18 * S, 21 * S], fill=(236, 232, 255, 255))
         d.ellipse([13.6 * S, 14.2 * S, 19.6 * S, 20.2 * S], fill=core + (255,))
     im.resize((30, 30), Image.LANCZOS).save(path, optimize=True)
+# 숲 걷기 도트(wk/fuse.png): PMD SpriteCollab의 큐레무 블랙(0646/0001)·화이트(0646/0002). build_walk9.py와 같은 칸(48px, 4프레임, 아래/왼/오/위)
+# 네크로즈마 황혼의갈기·새벽의날개는 SpriteCollab에 걷기 도트가 없어서 게임이 솔가레오·루나아라 것을 쓴다(FUSE의 wk가 없으면 mate)
+import re
+PMD = 'https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite'
+WALK = [(10022, '0646/0001'), (10023, '0646/0002')]
+CELL, NF, DIRS = 48, 4, [0, 6, 2, 4]
+sheet = Image.new('RGBA', (len(WALK) * NF * CELL, 4 * CELL), (0, 0, 0, 0))
+for j, (i, sub) in enumerate(WALK):
+    get(f'{PMD}/{sub}/Walk-Anim.png', f'{WORK}/pmd/{i}/Walk-Anim.png'); get(f'{PMD}/{sub}/AnimData.xml', f'{WORK}/pmd/{i}/AnimData.xml')
+    xml = open(f'{WORK}/pmd/{i}/AnimData.xml', encoding='utf-8').read()
+    blk = re.search(r'<Name>Walk</Name>(.*?)</Anim>', xml, re.S).group(1)
+    fw = int(re.search(r'<FrameWidth>(\d+)', blk).group(1)); fh = int(re.search(r'<FrameHeight>(\d+)', blk).group(1))
+    n = len(re.findall(r'<Duration>', blk))
+    im = Image.open(f'{WORK}/pmd/{i}/Walk-Anim.png').convert('RGBA')
+    frames = [[im.crop(((kk * n // NF) * fw, dr * fh, (kk * n // NF) * fw + fw, dr * fh + fh)) for kk in range(NF)] for dr in DIRS]
+    l, tp, r, btm = fw, fh, 0, 0
+    for row in frames:
+        for f in row:
+            bb = f.getbbox()
+            if bb: l, tp, r, btm = min(l, bb[0]), min(tp, bb[1]), max(r, bb[2]), max(btm, bb[3])
+    cx = fw // 2; half = max(cx - l, r - cx)
+    s = min(1.0, CELL / max(half * 2, btm - tp, 1))
+    for di, row in enumerate(frames):
+        for kk, f in enumerate(row):
+            c = f.crop((cx - half, tp, cx + half, btm))
+            if s < 1: c = c.resize((max(1, round(c.width * s)), max(1, round(c.height * s))), Image.NEAREST)
+            sheet.paste(c, (j * NF * CELL + kk * CELL + (CELL - c.width) // 2, di * CELL + (CELL - c.height)), c)
+sheet.save(f'{GAME}/wk/fuse.png', optimize=True)
+
 prism(f'{GAME}/it/n-solarizer.png', (232, 150, 40), (255, 190, 60), 'sun')
 prism(f'{GAME}/it/n-lunarizer.png', (98, 80, 200), (150, 120, 255), 'moon')
 print('fusion', IDS, 'bundle bytes', sum(os.path.getsize(os.path.join(GAME, 'bt', f'x{s}{CHUNK}.json')) for s in 'fb'))

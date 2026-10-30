@@ -132,7 +132,9 @@ export class Accounts {
       CREATE TABLE IF NOT EXISTS fails(id TEXT PRIMARY KEY, n INTEGER, until INTEGER);
       CREATE TABLE IF NOT EXISTS signups(ip TEXT, t INTEGER);`);
     // 닉네임(대소문자 무시하고 겹치지 않게). 예전 계정은 닉네임이 없으면 아이디를 쓴다
-    if (!this.sql.exec('PRAGMA table_info(users)').toArray().some(c => c.name === 'nick')) this.sql.exec('ALTER TABLE users ADD COLUMN nick TEXT');
+    // 기록 때의 파티: best_party(최고 층에 처음 왔을 때), clear_party(마지막 클리어)
+    const cols = this.sql.exec('PRAGMA table_info(users)').toArray().map(c => c.name);
+    for (const c of ['nick', 'best_party', 'clear_party']) if (!cols.includes(c)) this.sql.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`);
     this.sql.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_nick ON users(nick COLLATE NOCASE)');
   }
   nickTaken(nick, except) { const u = this.row('SELECT id FROM users WHERE (nick = ? COLLATE NOCASE OR (nick IS NULL AND id = ?)) AND id != ?', nick, nick.toLowerCase(), except || ''); return !!u; }
@@ -168,6 +170,13 @@ export class Accounts {
           'SELECT COUNT(*) AS n FROM users WHERE best > ? OR (best = ? AND (clears > ? OR (clears = ? AND best_t < ?)))', u.best, u.best, u.clears, u.clears, u.best_t).n };
       }
       return json({ top, mine });
+    }
+    // 랭킹에서 누른 사람: 닉네임·기록·기록 때의 파티
+    if (path === 'user') {
+      const u = this.row('SELECT id, COALESCE(nick, id) AS nick, best, clears, best_party, clear_party FROM users WHERE id = ?', url.searchParams.get('id') || '');
+      if (!u) return json({ err: 'nf' }, 404);
+      const pj = s => { try { return s ? JSON.parse(s) : null; } catch (_) { return null; } };
+      return json({ id: u.id, nick: u.nick, best: u.best, clears: u.clears, bestParty: pj(u.best_party), clearParty: pj(u.clear_party) });
     }
     if (path === 'signup' && M === 'POST') {
       const id = String(body.id || ''), key = String(body.key || ''), nick = cleanNick(body.nick), ip = req.headers.get('X-IP') || '';
@@ -227,9 +236,11 @@ export class Accounts {
     // 기록: 최고 층은 더 높을 때만, 클리어는 한 판에 한 번(브라우저가 정해서 보낸다)
     if (path === 'record' && M === 'POST') {
       const fl = Math.min(Math.max(Math.floor(+body.best) || 0, 0), 999);
+      const party = x => Array.isArray(x) && x.length && x.length <= 6 ? JSON.stringify(x).slice(0, 16384) : null;  // 너무 크면 버린다
+      const bp = party(body.bestParty), cp = party(body.clearParty), ok = s => s && s.length < 16384;
       const u = this.row('SELECT best FROM users WHERE id = ?', id);
-      if (u && fl > u.best) this.sql.exec('UPDATE users SET best = ?, best_t = ? WHERE id = ?', fl, now, id);
-      if (body.clear) this.sql.exec('UPDATE users SET clears = clears + 1 WHERE id = ?', id);
+      if (u && fl > u.best) this.sql.exec('UPDATE users SET best = ?, best_t = ?, best_party = ? WHERE id = ?', fl, now, ok(bp) ? bp : null, id);
+      if (body.clear) this.sql.exec('UPDATE users SET clears = clears + 1, clear_party = COALESCE(?, clear_party) WHERE id = ?', ok(cp) ? cp : null, id);
       return json(this.me(id));
     }
     return json({ err: 'nf' }, 404);

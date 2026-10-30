@@ -161,22 +161,24 @@ export class Accounts {
     // 손님 이름이 계정 아이디와 겹치는지 (방 서버만 묻는다)
     if (path === 'exists') return json({ exists: this.nickTaken(url.searchParams.get('id') || '') });
     if (path === 'rank') {
-      const top = this.sql.exec('SELECT id, COALESCE(nick, id) AS nick, best, clears FROM users WHERE best > 0 ORDER BY best DESC, clears DESC, best_t ASC LIMIT 50').toArray();
+      // 아이디는 밖으로 내보내지 않는다(로그인에만 쓴다). 랭킹·기록 보기는 닉네임으로
+      const top = this.sql.exec('SELECT COALESCE(nick, id) AS nick, best, clears FROM users WHERE best > 0 ORDER BY best DESC, clears DESC, best_t ASC LIMIT 50').toArray();
       const id = await this.who(req);
       let mine = null;
       if (id) {
         const u = this.row('SELECT best, clears, best_t FROM users WHERE id = ?', id);
-        if (u && u.best > 0) mine = { id, nick: this.me(id).nick, best: u.best, clears: u.clears, rank: 1 + this.row(
+        if (u && u.best > 0) mine = { nick: this.me(id).nick, best: u.best, clears: u.clears, rank: 1 + this.row(
           'SELECT COUNT(*) AS n FROM users WHERE best > ? OR (best = ? AND (clears > ? OR (clears = ? AND best_t < ?)))', u.best, u.best, u.clears, u.clears, u.best_t).n };
       }
       return json({ top, mine });
     }
     // 랭킹에서 누른 사람: 닉네임·기록·기록 때의 파티
     if (path === 'user') {
-      const u = this.row('SELECT id, COALESCE(nick, id) AS nick, best, clears, best_party, clear_party FROM users WHERE id = ?', url.searchParams.get('id') || '');
+      const n = url.searchParams.get('nick') || '';
+      const u = this.row('SELECT COALESCE(nick, id) AS nick, best, clears, best_party, clear_party FROM users WHERE nick = ? COLLATE NOCASE OR (nick IS NULL AND id = ?)', n, n.toLowerCase());
       if (!u) return json({ err: 'nf' }, 404);
       const pj = s => { try { return s ? JSON.parse(s) : null; } catch (_) { return null; } };
-      return json({ id: u.id, nick: u.nick, best: u.best, clears: u.clears, bestParty: pj(u.best_party), clearParty: pj(u.clear_party) });
+      return json({ nick: u.nick, best: u.best, clears: u.clears, bestParty: pj(u.best_party), clearParty: pj(u.clear_party) });
     }
     if (path === 'signup' && M === 'POST') {
       const id = String(body.id || ''), key = String(body.key || ''), nick = cleanNick(body.nick), ip = req.headers.get('X-IP') || '';

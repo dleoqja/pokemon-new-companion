@@ -5864,17 +5864,17 @@ async function openRank(back=showStart){
   let r; try{ r=await api('GET','rank'); }catch(_){ r=null; }
   if(!$('rkList')) return;
   if(!r||!r.ok){ $('rkMsg').textContent='서버에 연결하지 못했어.'; return; }
-  const {top,mine}=r.j, row=(n,u,me)=>`<button class="rk${me?' me':''}" type="button" data-u="${escN(u.id)}"><span class="rk-n">${n}</span><span class="rk-id">${escN(u.nick||u.id)}</span><span class="rk-v">${u.best}층${u.clears?` · 클리어 ${u.clears}`:''}</span></button>`;
+  const {top,mine}=r.j, row=(n,u,me)=>`<button class="rk${me?' me':''}" type="button" data-u="${escN(u.nick)}"><span class="rk-n">${n}</span><span class="rk-id">${escN(u.nick)}</span><span class="rk-v">${u.best}층${u.clears?` · 클리어 ${u.clears}`:''}</span></button>`;
   $('rkMsg').textContent=AUTH?'최고 층이 높은 순 (같으면 클리어가 많은 순, 그다음 먼저 닿은 순)':'로그인하면 내 기록도 올라간다. 최고 층이 높은 순.';
-  $('rkList').innerHTML=(top.length?top.map((u,i)=>row(i+1,u,AUTH&&u.id===AUTH.id)).join(''):'<p class="note">아직 기록이 없다.</p>')
-    +(mine&&!top.some(u=>u.id===mine.id)?`<p class="note">내 순위</p>${row(mine.rank,mine,true)}`:'');
+  $('rkList').innerHTML=(top.length?top.map((u,i)=>row(i+1,u,AUTH&&u.nick===AUTH.nick)).join(''):'<p class="note">아직 기록이 없다.</p>')
+    +(mine&&!top.some(u=>u.nick===mine.nick)?`<p class="note">내 순위</p>${row(mine.rank,mine,true)}`:'');
   $('rkList').querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>openRankUser(b.dataset.u,()=>openRank(back)));
 }
 // 랭킹에서 누른 사람의 기록 파티: 최고 층에 처음 왔을 때와 마지막 클리어 때. 포켓몬을 누르면 정보
-async function openRankUser(id,back){
+async function openRankUser(nick,back){
   ov(`<h2>기록</h2><p class="note">불러오는 중…</p><div class="row-btns"><button class="btn go" id="ruBack" type="button">뒤로</button></div>`,'title');
   $('ruBack').onclick=()=>back();
-  let r; try{ r=await api('GET','user?id='+encodeURIComponent(id)); }catch(_){ r=null; }
+  let r; try{ r=await api('GET','user?nick='+encodeURIComponent(nick)); }catch(_){ r=null; }
   if(!$('ruBack')) return;
   if(!r||!r.ok){ $('sheet').querySelector('.note').textContent='불러오지 못했어.'; return; }
   const u=r.j, sec=(k,title,l)=>`<span class="lbl">${title}</span>${l&&l.length?`<div class="list" data-g="${k}">${l.map((m,i)=>pmHTML(m,i,false,false)).join('')}</div>`:'<p class="note">이 기록 때의 파티는 남아 있지 않다.</p>'}`;

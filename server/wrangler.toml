@@ -10,3 +10,12 @@ class_name = "Room"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room"]
+
+# 계정(아이디·비밀번호, 저장 칸, 랭킹). 'main' 하나만 쓴다
+[[durable_objects.bindings]]
+name = "ACCOUNTS"
+class_name = "Accounts"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Accounts"]

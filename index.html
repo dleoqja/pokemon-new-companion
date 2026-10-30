@@ -6994,7 +6994,7 @@ function openHelp(tab=0,back=showStart){
     <div class="hp-body" id="hpBody">${body}</div>
     <div class="row-btns"><button class="btn" id="hpBack" type="button">닫기</button></div>`,'help');
   $('sheet').querySelectorAll('[data-ht]').forEach(b=>b.onclick=()=>openHelp(+b.dataset.ht,back));
-  $('hpBack').onclick=back;
+  $('hpBack').onclick=()=>back();  // 클릭 이벤트를 넘기지 않는다(openOpt가 인자를 시작 화면에서 열었다는 뜻으로 읽음)
 }
 
 /* ================= 시작 ================= */

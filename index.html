@@ -1019,7 +1019,7 @@ function bossBuild(e){
   e.hp=maxhp(e);
 }
 // 보스 AI: 모든 기술·대상의 예상 데미지(난수 없이)를 비교해서, 쓰러뜨릴 수 있으면 확실히(우선도 기술 우선),
-// 체력이 넉넉하면 강화, 위험하면 회복. 헛수고(효과 없음·실패)는 하지 않는다
+// 체력이 넉넉하면 강화, 위험하면 회복. 헛수고(효과 없음·실패)는 하지 않는다. 다이맥스 중에는 변화기(=다이월)를 고르지 않는다
 function aiDmg(e,p,mid){
   const R0=R; R=()=>.5;
   try{ const fd=fixedDmg(e,p,mid); if(fd!=null) return fd*(OHKO.has(X(mid).id)?.3:1); const r=calc(e,p,mid); const x=X(mid); return r.dmg*(x.hit?(Array.isArray(x.hit)?(x.hit[0]+x.hit[1])/2:x.hit):1); }
@@ -1035,6 +1035,7 @@ function bossAI(e){
   for(const mid of ms){
     const m=MV[mid], x=X(mid);
     if(m.c==='x'){
+      if(e.dmax>0) continue;  // 다이맥스 중 변화기는 다이월이 된다(강화·회복이 아님). 공격할 기술이 없을 때만 아래 pk로
       for(const p of fs){
         if(x.tg==='f'&&dab(e,p)==='magic-bounce') continue;
         let sc=statusValue(e,p,mid);
@@ -2457,7 +2458,7 @@ function aiMove(e,p){
     if(willFail(e,p,mid)) return [mid,0];
     const m=MV[mid], t=mvType(e,mid);
     if(absorbKind(e,p,mid,t)) return [mid,0];
-    if(m.c==='x') return [mid,X(mid).tg==='f'&&dab(e,p)==='magic-bounce'?0:statusValue(e,p,mid)*(.8+R()*.4)];
+    if(m.c==='x') return [mid,e.dmax>0||X(mid).tg==='f'&&dab(e,p)==='magic-bounce'?0:statusValue(e,p,mid)*(.8+R()*.4)];  // 다이맥스 중 변화기는 다이월
     const fx=aiFixed(e,p,mid); if(fx!=null) return [mid,fx*(.8+R()*.4)];
     return [mid,power(e,p,mid)*m.a/100*(base(e).t.includes(t)?1.5:1)*effFor(mid,t,p.ill?{id:p.ill.id,v:p.v}:p,e)*slowMul(mid)*(.8+R()*.4)];
   }).filter(s=>s[1]>0);

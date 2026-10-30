@@ -5800,9 +5800,8 @@ function openAccount(signup=false){
         <p>최고 기록 ${AUTH.best||0}층 · 클리어 ${AUTH.clears||0}번</p></div>
       <p class="note">저장 칸 5개가 계정에 저장돼서 다른 기기에서 로그인해도 이어서 할 수 있다. 멀티와 랭킹에는 닉네임이 나온다. 닉네임은 설정에서 바꿀 수 있다.</p>
       <p class="note" id="acErr"></p>
-      <div class="row-btns"><button class="btn" id="acRank" type="button">랭킹</button><button class="btn" id="acOut" type="button">로그아웃</button></div>
+      <div class="row-btns"><button class="btn" id="acOut" type="button">로그아웃</button></div>
       <div class="row-btns"><button class="btn go" id="acBack" type="button">뒤로</button></div>`,'title');
-    $('acRank').onclick=()=>openRank(()=>openAccount());
     $('acBack').onclick=showStart;
     $('acOut').onclick=async()=>{
       $('acErr').textContent='저장을 올리는 중…'; await syncUp();

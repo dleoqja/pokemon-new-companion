@@ -5790,6 +5790,10 @@ setInterval(()=>{ if(AUTH&&Object.keys(jget(pendKey(),{})).length) syncUp(); },3
 // 켤 때: 토큰이 아직 살아 있는지 보고, 못 보낸 기록·저장을 올린다
 if(AUTH) api('GET','me').then(r=>{ if(r.ok&&AUTH){ Object.assign(AUTH,{nick:r.j.nick,best:r.j.best,clears:r.j.clears}); setAuth(AUTH); sendRec(); syncUp(); } }).catch(()=>{});
 
+// 손님 저장 칸을 계정으로 옮긴다: 계정 칸에 쓰고 서버에 올릴 목록에 넣은 뒤, 손님 칸은 비운다(로그아웃하면 안 보이게)
+function moveGuest(guest){
+  guest.forEach((s,i)=>{ if(!s) return; s.t=Date.now(); try{ localStorage.setItem(runKey(i),JSON.stringify(s)); localStorage.removeItem(i?`kr2-run-${i+1}`:'kr2-run'); }catch(_){} markPend(i,s.t); });
+}
 const ID_OK=/^[a-z0-9_]{3,12}$/;
 const cleanAcNick=s=>String(s||'').replace(/[<>"&'`\u0000-\u001f\u007f]/g,'').replace(/\s+/g,' ').trim().slice(0,8);
 const NICK_ERR={nick:'이미 누가 쓰는 닉네임이야.',bad:'닉네임은 1~8자야(꺾쇠·따옴표는 못 쓴다).'};
@@ -5839,17 +5843,17 @@ function openAccount(signup=false){
     const gBest=best, gClear=store('kr2-clear')==='1';  // 손님일 때의 기록(이 기기)
     setAuth({id:r.j.id,nick:r.j.nick,token:r.j.token,best:r.j.best,clears:r.j.clears}); useSlot(0);
     // 가입: 지금까지 한 손님 저장 칸과 기록을 묻지 않고 계정에 그대로 저장한다
-    if(signup){ guest.forEach((s,i)=>{ if(!s) return; s.t=Date.now(); try{ localStorage.setItem(runKey(i),JSON.stringify(s)); }catch(_){} markPend(i,s.t); }); if(gBest>1) recordFloor(gBest,true); if(gClear) recordClear(true); }
+    if(signup){ moveGuest(guest); if(gBest>1) recordFloor(gBest,true); if(gClear) recordClear(true); }
     $('acErr').textContent='저장 칸을 받는 중…';
     await syncDown(); sendRec();
     toast(signup?`${r.j.nick}(으)로 가입했다${guest.some(Boolean)?' · 저장 칸도 계정에 저장했다':''}`:`${r.j.nick}(으)로 로그인했다`,1800);
     // 계정에 저장이 없고 이 기기에 손님 저장이 있으면 가져올지 묻는다
     if(!signup&&guest.some(Boolean)&&!allRuns().some(Boolean)){
-      ov(`<h2>저장 칸을 가져올까?</h2><p>이 기기에 로그인하기 전의 저장 칸이 있어. 계정으로 가져올까? (원래 칸은 그대로 남는다)</p>
+      ov(`<h2>저장 칸을 가져올까?</h2><p>이 기기에 로그인하기 전의 저장 칸이 있어. 계정으로 옮길까? (옮기면 로그인하지 않았을 때는 안 보인다)</p>
         <div class="slots">${guest.map((s,i)=>s?`<div class="btn slt" style="pointer-events:none"><span class="slt-n">${i+1}</span>${slotLine(s)}</div>`:'').join('')}</div>
-        <div class="row-btns"><button class="btn" id="imNo" type="button">아니요</button><button class="btn go" id="imYes" type="button">가져온다</button></div>`,'title');
+        <div class="row-btns"><button class="btn" id="imNo" type="button">아니요</button><button class="btn go" id="imYes" type="button">옮긴다</button></div>`,'title');
       $('imNo').onclick=showStart;
-      $('imYes').onclick=()=>{ guest.forEach((s,i)=>{ if(!s) return; s.t=Date.now(); try{ localStorage.setItem(runKey(i),JSON.stringify(s)); }catch(_){} markPend(i,s.t); }); syncUp(); toast('저장 칸을 가져왔다'); showStart(); };
+      $('imYes').onclick=()=>{ moveGuest(guest); syncUp(); toast('저장 칸을 계정으로 옮겼다'); showStart(); };
       return;
     }
     showStart();

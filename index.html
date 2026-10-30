@@ -256,6 +256,7 @@ body.wide .pad{flex-wrap:wrap;justify-content:center}
 #dblX{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:40;flex:none;width:max-content;max-width:92%;font-size:14px;padding:8px 12px}
 .btn{flex:1;border:0;border-radius:6px;padding:12px;font-size:17px;background:var(--frame-hi);box-shadow:0 0 0 2px #000;color:#fff}
 .slots{display:flex;flex-direction:column;gap:8px}
+.slt-r{display:flex;gap:8px}.slt-x{flex:none;width:48px;padding:0;font-size:20px;background:#c8372d}.btn.del{background:#c8372d}
 .slt{display:flex;align-items:center;gap:10px;text-align:left;padding:6px 10px;min-height:56px}.slt:disabled{opacity:.45}
 .slt .spr{--sp:48px;flex:none}.slt-n{flex:none;width:22px;font-size:18px;color:#8496a3;text-align:center}
 .slt-t{display:flex;flex-direction:column;gap:2px;min-width:0}.slt-t b{font-weight:400;font-size:15px}.slt-t small{font-size:12px;color:#8496a3}
@@ -7010,9 +7011,17 @@ function slotLine(s){
 function openSlots(how,onPick,onBack=how==='load'?showStart:null){
   const runs=allRuns();
   ov(`<h2>${how==='load'?'불러오기':'어느 칸에 저장할까?'}</h2>
-    <div class="slots">${runs.map((s,i)=>`<button class="btn slt" data-s="${i}" type="button"${how==='load'&&!s?' disabled':''}><span class="slt-n">${i+1}</span>${s?slotLine(s):'<span class="slt-t"><b>빈 칸</b></span>'}</button>`).join('')}</div>
+    <div class="slots">${runs.map((s,i)=>`<div class="slt-r"><button class="btn slt" data-s="${i}" type="button"${how==='load'&&!s?' disabled':''}><span class="slt-n">${i+1}</span>${s?slotLine(s):'<span class="slt-t"><b>빈 칸</b></span>'}</button>${how==='load'&&s?`<button class="btn slt-x" data-x="${i}" type="button" aria-label="${i+1}번 칸 지우기">✕</button>`:''}</div>`).join('')}</div>
     ${onBack?'<div class="row-btns"><button class="btn" id="sltBack" type="button">뒤로</button></div>':''}`,'title');
   if(onBack) $('sltBack').onclick=onBack;
+  // 불러오기의 빨간 X: 그 칸의 저장을 지운다(한 번 더 묻는다). 다 지우면 시작 화면으로
+  $('sheet').querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.x;
+    ov(`<h2>${i+1}번 칸을 정말 지울까?</h2><p>지운 기록은 되돌릴 수 없어.</p><div class="slots"><div class="btn slt" style="pointer-events:none"><span class="slt-n">${i+1}</span>${slotLine(runs[i])}</div></div>
+      <div class="row-btns"><button class="btn" id="sltNo" type="button">아니요</button><button class="btn del" id="sltYes" type="button">지운다</button></div>`,'title');
+    $('sltYes').onclick=()=>{ delRun(i); if(allRuns().some(Boolean)) openSlots(how,onPick,onBack); else showStart(); };
+    $('sltNo').onclick=()=>openSlots(how,onPick,onBack);
+  });
   $('sheet').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.s, s=runs[i];
     if(how==='load'){ useSlot(i); resumeRun(s); return; }

@@ -1,0 +1,12 @@
+name = "pokemon-new-companion-rooms"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+# 무료 플랜은 SQLite 기반 Durable Object만 쓸 수 있다 (저장은 안 하지만 형식만 맞춘다)
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

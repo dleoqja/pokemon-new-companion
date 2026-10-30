@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://forest-companion.github.io/sitemap.xml

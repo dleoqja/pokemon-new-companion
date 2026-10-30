@@ -3868,7 +3868,7 @@ function itemTxt(id){
   if(id==='candy10') return '이상한사탕 10개. 고른 포켓몬의 레벨이 1씩 오른다.';
   if(ITEMS[id]&&ITEMS[id].c==='m') return mintTxt(id);
   if(id==='maxmush') return MUSH_TXT;
-  if(id==='soup') return '거다이맥스할 수 있는 포켓몬에게 먹이면, 다이맥스할 때 거다이맥스하게 된다.';
+  if(id==='soup') return '거다이맥스할 수 있는 포켓몬에게 먹이면 다이맥스 포켓몬이 되고(다이맥스밴드 없이도 배틀마다 한 번), 다이맥스할 때 거다이맥스하게 된다.';
   if(id==='ability-capsule') return '포켓몬의 특성을 다른 일반 특성(특성 1 ↔ 특성 2)으로 바꾼다. 일반 특성이 하나뿐이거나 숨겨진 특성이면 쓸 수 없다.';
   if(id==='ability-patch') return '포켓몬의 특성을 숨겨진 특성으로 바꾼다. 이미 숨겨진 특성이면 원래 특성(특성 1)으로 돌아간다. 숨겨진 특성이 없으면 쓸 수 없다.';
   const it=ITEMS[id]; if(!it) return '';
@@ -6713,12 +6713,12 @@ function useAbil(i){
 // 가방에서 쓰는 도구: 이상한사탕(바로 쓰기)·다이스프(거다이맥스할 수 있는 포켓몬에게)
 async function useBagCandy(i){ await useCandy(0,1,{take:()=>{ bag.inv.splice(i,1); saveRun(); },back:()=>openBag()}); }
 function useSoup(i){
-  const ok=m=>!!gmaxFor(m.id)&&!m.gmax;
+  const ok=m=>!!gmaxFor(m.id)&&!(m.gmax&&m.dx);
   ov(`<div class="itm-h">${itemIcon('soup','iic big')}<div><h2>다이스프</h2><p>${itemTxt('soup')}</p></div></div>
     <span class="lbl">누구에게 먹일까? (거다이맥스할 수 있는 포켓몬만)</span>
     <div class="list">${party.map((m,j)=>pmHTML(m,j,!ok(m),false)).join('')}</div>
     <div class="row-btns"><button class="btn" id="biBack" type="button">뒤로</button></div>`,'bag');
-  $('sheet').querySelectorAll('.pm').forEach(b=>b.onclick=()=>{ const m=party[+b.dataset.i]; if(!ok(m)) return; m.gmax=true; bag.inv.splice(i,1); whud(); saveRun(); toast(`${josa(nm(m),'은/는')} 다이스프를 먹고 거다이맥스할 수 있게 됐다!`); openBag(); });
+  $('sheet').querySelectorAll('.pm').forEach(b=>b.onclick=()=>{ const m=party[+b.dataset.i]; if(!ok(m)) return; m.gmax=true; m.dx=1; bag.inv.splice(i,1); whud(); saveRun(); toast(`${josa(nm(m),'은/는')} 다이스프를 먹고 거다이맥스하는 다이맥스 포켓몬이 됐다!`); openBag(); });
   $('biBack').onclick=()=>openBag();
 }
 

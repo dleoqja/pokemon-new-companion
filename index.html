@@ -7033,10 +7033,11 @@ function showStart(){
     ${sv?`<div class="row-btns"><button class="btn go" id="resume" type="button">불러오기</button></div>`:''}
     <div class="row-btns"><button class="btn go" id="spin" type="button">돌리기</button></div>
     <div class="row-btns"><button class="btn" id="mpBtn" type="button">${mp?`방 ${mp.code} · ${mp.peers.length}명 (나가기)`:'멀티 (방 코드)'}</button></div>
-    <div class="row-btns"><button class="btn" id="helpBtn" type="button">도움말</button></div>
+    <div class="row-btns"><button class="btn" id="helpBtn" type="button">도움말</button><button class="btn" id="optBtn" type="button">설정</button></div>
     <p class="credit">v${VER} · <button class="lnk" id="credBtn" type="button">에셋 출처</button></p>`,'title');
   $('mpBtn').onclick=()=>{ if(mp){ mpLeave(); showStart(); } else openRoom(); };
   $('helpBtn').onclick=()=>openHelp();
+  $('optBtn').onclick=()=>openOpt(true);
   $('credBtn').onclick=openCredits;
   if(sv) $('resume').onclick=()=>openSlots('load');
   const strip=$('strip'), reel=reelRun($('roul'),strip,K,CW,idx=>{
@@ -7050,13 +7051,13 @@ function showStart(){
   $('spin').onclick=()=>{ $('spin').disabled=true; $('spin').textContent='…'; $('rres').textContent=''; reel.go(); };
 }
 // 룰렛 띠: box 안의 strip(K칸 묶음을 세 번 이어 붙임, 칸 너비 CW)을 대기 중 천천히 돌리다가, go()를 부르면 가속 → 최고 속도 유지 → 천천히 감속,
-// 칸 경계를 살짝 넘었다가 틱 걸려 뒤로 돌아와 멈춘다. 멈추면 onStop(가운데 바늘이 가리키는 칸 번호 0~K-1). 스타팅 룰렛과 나옹의 슬롯머신
+// 칸 경계를 살짝 넘었다가 틱 걸려 뒤로 돌아와 멈춘다. 뽑는 재미라서 연출 줄이기와 상관없이 늘 돈다. 멈추면 onStop(가운데 바늘이 가리키는 칸 번호 0~K-1). 스타팅 룰렛과 나옹의 슬롯머신
 function reelRun(box,strip,K,CW,onStop){
   const L=K*CW;
-  const IDLE=REDUCED?0:420, VMAX=3400, ACC=600, HOLD=2000, DEC=6800, PW=3; // PW: 감속이 점점 약해지는 정도
+  const IDLE=420, VMAX=3400, ACC=600, HOLD=2000, DEC=6800, PW=3; // PW: 감속이 점점 약해지는 정도
   let pos=CW*2.5, v=IDLE, phase='idle', t0=0, last=performance.now(), x0=0, D=0, T=1, bx=0, bk=0, lastCell=0;
   const pin=box.querySelector('.pin');
-  const tickPin=k=>{ if(!REDUCED) pin.animate([{transform:'translateX(-1.5px) rotate(0)'},{transform:`translateX(-1.5px) rotate(${-8*k}deg)`},{transform:'translateX(-1.5px) rotate(0)'}],{duration:90,easing:'ease-out'}); };
+  const tickPin=k=>{ pin.animate([{transform:'translateX(-1.5px) rotate(0)'},{transform:`translateX(-1.5px) rotate(${-8*k}deg)`},{transform:'translateX(-1.5px) rotate(0)'}],{duration:90,easing:'ease-out'}); };
   const render=()=>{ strip.style.transform=`translateX(${box.clientWidth/2-(L+(pos%L))}px)`; };
   const done=()=>onStop(Math.floor((pos%L)/CW));
   const tick=now=>{
@@ -7076,7 +7077,6 @@ function reelRun(box,strip,K,CW,onStop){
   };
   render(); requestAnimationFrame(tick);
   return { go(){
-    if(REDUCED){ pos=(Math.floor(pos/CW)+5+rnd(K)+.5)*CW; phase='stop'; render(); done(); return; }
     phase='acc'; t0=performance.now();
   } };
 }
@@ -7128,18 +7128,20 @@ const OPT_LIST=[
   ['evo','진화 연출 보기','진화할 때 빛나며 모습이 바뀌는 연출을 보고, 도중에 그만둘 수 있다. 끄면 바로 진화한다.'],
   ['fx','연출 줄이기','화면 흔들림·기술 이펙트·등장 애니메이션 등을 줄여서 빠르게 진행한다.'],
 ];
-function openOpt(){
+// title: 시작 화면에서 열었으면 나가기가 없고 닫으면 시작 화면으로
+function openOpt(title=false){
   for(const k in held) held[k]=0;
   ov(`<h2>설정</h2><div class="opts">
     <div class="opt spd"><span><b>진행 속도</b><small>배틀 메시지와 연출이 빨라진다.</small></span><span class="seg">${[1,2,4].map(v=>`<button type="button" data-spd="${v}" aria-pressed="${SPEED===v}">x${v}</button>`).join('')}</span></div>
     ${OPT_LIST.map(([k,t,d])=>`<button class="opt" type="button" data-k="${k}" aria-pressed="${!!OPT[k]}"><span><b>${t}</b><small>${d}</small></span><i class="sw"></i></button>`).join('')}
     ${mp?`<div class="opt nm"><span><b>멀티 이름</b><small>방 사람들에게 보이는 이름 (8자까지)</small><span class="nmrow"><input class="inp" id="oName" maxlength="8" autocomplete="off" value="${(mp.name||'').replace(/[<>"&]/g,'')}"><button class="btn" id="oNameOk" type="button">바꾸기</button></span></span></div>`:''}</div>
-    <div class="row-btns"><button class="btn" id="oHelp" type="button">도움말</button><button class="btn" id="oQuit" type="button">나가기</button></div>
-    <div class="row-btns"><button class="btn go" id="oClose" type="button">닫기</button></div>`,'opt');
+    ${title?'':'<div class="row-btns"><button class="btn" id="oHelp" type="button">도움말</button><button class="btn" id="oQuit" type="button">나가기</button></div>'}
+    <div class="row-btns"><button class="btn go" id="oClose" type="button">닫기</button></div>`,title?'title':'opt');
   $('sheet').querySelectorAll('.opt[data-k]').forEach(b=>b.onclick=()=>{ const k=b.dataset.k; OPT[k]=!OPT[k]; store('kr-opt',JSON.stringify(OPT)); b.setAttribute('aria-pressed',OPT[k]); if(k==='fx') REDUCED=OS_REDUCED||OPT.fx; });
   $('sheet').querySelectorAll('[data-spd]').forEach(b=>b.onclick=()=>{ SPEED=+b.dataset.spd; store('kr-spd',SPEED); $('sheet').querySelectorAll('[data-spd]').forEach(x=>x.setAttribute('aria-pressed',x===b)); });
   if($('oName')){ const inp=$('oName'), ok=()=>{ const n=inp.value.replace(/[<>"&]/g,'').trim().slice(0,8); if(!n||!mp) return; mpRename(n); inp.value=n; toast(`이름을 ${n}(으)로 바꿨다`); };
     $('oNameOk').onclick=ok; inp.addEventListener('keydown',ev=>{ ev.stopPropagation(); if(ev.isComposing) return; if(ev.key==='Enter'){ ev.preventDefault(); ok(); } }); }
+  if(title){ $('oClose').onclick=showStart; return; }
   $('oHelp').onclick=()=>openHelp(0,openOpt);
   $('oQuit').onclick=()=>quitAsk(openOpt);
   $('oClose').onclick=closeOv;

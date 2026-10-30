@@ -4096,6 +4096,12 @@ function bagItem(i){
   $('biDrop').onclick=()=>{ ov(`<h2>정말 버릴까?</h2><p>${josa(itemName(id),'을/를')} 버린다. 다시 주울 수 없어.</p><div class="row-btns"><button class="btn" id="dNo" type="button">아니요</button><button class="btn go" id="dYes" type="button">버린다</button></div>`,'bag');
     $('dNo').onclick=()=>bagItem(i); $('dYes').onclick=()=>{ bag.inv.splice(i,1); toast(`${itemName(id)}을(를) 버렸다`); openBag(); }; };
 }
+// 가방 도구 버리기: 한 번 더 묻고, 아니요면 back(그 도구 창)으로
+function bagDrop(i,back){
+  const id=bag.inv[i];
+  ov(`<h2>정말 버릴까?</h2><p>${josa(itemName(id),'을/를')} 버린다. 다시 주울 수 없어.</p><div class="row-btns"><button class="btn" id="dNo" type="button">아니요</button><button class="btn go" id="dYes" type="button">버린다</button></div>`,'bag');
+  $('dNo').onclick=()=>back(); $('dYes').onclick=()=>{ bag.inv.splice(i,1); saveRun(); toast(`${itemName(id)}을(를) 버렸다`); openBag(); };
+}
 function giveFromBag(i,j){
   const id=bag.inv[i], m=party[j], old=m.item;
   bag.inv.splice(i,1); if(old) bag.inv.push(old); m.item=id;
@@ -4175,12 +4181,16 @@ function placeItem(id){
 function useCandy(k,n,fromBag){
   return new Promise(res=>{
     const cap=lvCap();
-    if(fromBag&&party.every(m=>m.lv>=cap)){ toast(`모두 레벨 제한(Lv${cap})이라 쓸 수 없다`); fromBag.back(); res(); return; }
+    if(fromBag&&party.every(m=>m.lv>=cap)){
+      ov(`<div class="itm-h">${itemIcon('rare-candy','iic big')}<div><h2>이상한사탕</h2><p>모두 레벨 제한(Lv${cap})이라 지금은 쓸 수 없다.</p></div></div>
+        <div class="row-btns"><button class="btn" id="cdNo" type="button">뒤로</button><button class="btn" id="cdDrop" type="button">버리기</button></div>`,'bag');
+      $('cdNo').onclick=()=>{ fromBag.back(); res(); }; $('cdDrop').onclick=()=>{ fromBag.drop(); res(); }; return;
+    }
     if(party.every(m=>m.lv>=cap)){ const ok=invAdd('rare-candy'); say(ok?`모두 레벨 제한(Lv${cap})이라 이상한사탕을 가방에 넣었다.`:`모두 레벨 제한(Lv${cap})이라 이상한사탕을 쓸 수 없다.`); setTimeout(res,1000); return; }
     ov(`<div class="itm-h">${itemIcon('rare-candy','iic big')}<div><h2>이상한사탕${n>1?` (${k+1}/${n})`:''}</h2><p>누구에게 쓸까? 레벨이 1 오른다. (레벨 제한 Lv${cap})</p></div></div>
       <div class="list">${party.map((m,j)=>pmHTML(m,j,m.lv>=cap,false)).join('')}</div>
-      ${fromBag?'<div class="row-btns"><button class="btn" id="cdNo" type="button">취소</button></div>':''}`,fromBag?'bag':'reward');
-    if(fromBag) $('cdNo').onclick=()=>{ fromBag.back(); res(); };
+      ${fromBag?'<div class="row-btns"><button class="btn" id="cdNo" type="button">취소</button><button class="btn" id="cdDrop" type="button">버리기</button></div>':''}`,fromBag?'bag':'reward');
+    if(fromBag){ $('cdNo').onclick=()=>{ fromBag.back(); res(); }; $('cdDrop').onclick=()=>{ fromBag.drop(); res(); }; }
     $('sheet').querySelectorAll('.pm').forEach(b=>b.onclick=async()=>{
       if(fromBag) fromBag.take();
       closeOv(); const m=party[+b.dataset.i], old=m.lv, ratio=m.hp>0?m.hp/maxhp(m):0;
@@ -6889,7 +6899,7 @@ function useAbil(i){
   ov(`<div class="itm-h">${itemIcon(id,'iic big')}<div><h2>${itemName(id)}</h2><p>${itemTxt(id)}</p></div></div>
     <span class="lbl">누구에게 쓸까?</span>
     <div class="list">${party.map((m,j)=>pmHTML(m,j,abilTo(m,id)==null,false)).join('')}</div>
-    <div class="row-btns"><button class="btn" id="biBack" type="button">뒤로</button></div>`,'bag');
+    <div class="row-btns"><button class="btn" id="biBack" type="button">뒤로</button><button class="btn" id="biDrop" type="button">버리기</button></div>`,'bag');
   $('sheet').querySelectorAll('.pm').forEach(b=>b.onclick=()=>{ const m=party[+b.dataset.i], to=abilTo(m,id); if(to==null) return;
     const a=sp(m.id).a, from=abNo(a[m.abs||0]||a[0]), nw=abNo(a[to]);
     ov(`<h2>${nm(m)}에게 쓸까?</h2>
@@ -6900,17 +6910,19 @@ function useAbil(i){
     $('mYes').onclick=()=>{ m.abs=to; bag.inv.splice(i,1); whud(); saveRun(); toast(`${nm(m)}의 특성이 ${josa(nw,'이/가')} 되었다!`); openBag(); };
   });
   $('biBack').onclick=()=>openBag();
+  $('biDrop').onclick=()=>bagDrop(i,()=>bagItem(i));
 }
 // 가방에서 쓰는 도구: 이상한사탕(바로 쓰기)·다이스프(거다이맥스할 수 있는 포켓몬에게)
-async function useBagCandy(i){ await useCandy(0,1,{take:()=>{ bag.inv.splice(i,1); saveRun(); },back:()=>openBag()}); }
+async function useBagCandy(i){ await useCandy(0,1,{take:()=>{ bag.inv.splice(i,1); saveRun(); },back:()=>openBag(),drop:()=>bagDrop(i,()=>useBagCandy(i))}); }
 function useSoup(i){
   const ok=m=>!!gmaxFor(m.id)&&!(m.gmax&&m.dx);
   ov(`<div class="itm-h">${itemIcon('soup','iic big')}<div><h2>다이스프</h2><p>${itemTxt('soup')}</p></div></div>
     <span class="lbl">누구에게 먹일까? (거다이맥스할 수 있는 포켓몬만)</span>
     <div class="list">${party.map((m,j)=>pmHTML(m,j,!ok(m),false)).join('')}</div>
-    <div class="row-btns"><button class="btn" id="biBack" type="button">뒤로</button></div>`,'bag');
+    <div class="row-btns"><button class="btn" id="biBack" type="button">뒤로</button><button class="btn" id="biDrop" type="button">버리기</button></div>`,'bag');
   $('sheet').querySelectorAll('.pm').forEach(b=>b.onclick=()=>{ const m=party[+b.dataset.i]; if(!ok(m)) return; m.gmax=true; m.dx=1; bag.inv.splice(i,1); whud(); saveRun(); toast(`${josa(nm(m),'은/는')} 다이스프를 먹고 거다이맥스하는 다이맥스 포켓몬이 됐다!`); openBag(); });
   $('biBack').onclick=()=>openBag();
+  $('biDrop').onclick=()=>bagDrop(i,()=>bagItem(i));
 }
 
 /* ================= 전설의 숲 (작은 숲) =================

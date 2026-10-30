@@ -30,6 +30,8 @@
 
 - 로딩(index.html의 "로딩" 구역): `<body>` 맨 위의 `#load`(페이지를 받는 동안부터 보인다)에서 `preload`가 어디서나 쓰는 그림(`preloadList`: 가게·둥지·다이맥스 굴·거다이맥스 굴, `it/` 도구 아이콘, `fx/`(`FX_FILES` 목록, fx 파일을 더하면 여기도), `ic/` 아이콘 시트, `wk/` 걷기 도트, 약 16MB)을 `loadImg`로 받고 진행 막대를 채운 뒤 `start`/`resumeRun`. 5초 뒤 '건너뛰기'. 배틀 도트(`bt/`, 88MB)는 받지 않고 `prefetchBattle`이 3초마다 지금 숲의 돌아다니는 포켓몬·보스·둥지 무리(앞)와 내 파티(뒤) 묶음만 미리 받는다. `loadImg`는 못 불러온 그림을 5초 뒤 다시 받는다(`failAt`)
 
+- 오프라인(index.html의 "오프라인" 구역, `sw.js`): 서비스 워커가 index.html은 인터넷 먼저(안 되면 저장본), 나머지 같은 사이트 파일은 저장본 먼저(주소 뒤 `?v=` 무시), Google Fonts도 저장. 시작하면 페이지가 `fill`을 보내 `offline.json`(경로 → git 해시, `tools/build_offline.py`)의 없거나 해시가 바뀐 파일을 4개씩 받아 둔다(배틀 도트 포함 약 105MB, 글꼴 CSS·파일도). 진행은 `OFFLINE`·설정 창 '오프라인' 줄(`offlineTxt`), 처음 다 받으면 한 번 토스트(`kr-offline`). 멀티는 오프라인에서 안 된다. 앱 설치용 `manifest.webmanifest`(아이콘 `favicon-192/512.png`). **bt·fx·ic·it·map·wk나 아이콘 파일을 더하거나 바꾸면 `git add` 뒤 `python tools/build_offline.py`를 돌려 offline.json도 같이 커밋할 것.** 글꼴 주소를 바꾸면 sw.js의 `FONT_CSS`도
+
 ## 파일 구조
 - `index.html` — 게임 전체 코드(HTML/CSS/JS 한 파일). 포켓몬 데이터 JSON이 인라인으로 들어 있어서 파일이 크다(약 500KB). 수정할 땐 데이터 줄 말고 함수 단위로 찾아서 고칠 것
 - `bt/f{k}.json`, `bt/b{k}.json` — 배틀 도트 묶음(앞/뒤). 포켓몬 16마리씩, `k = floor((id-1)/16)`. 각 항목: `p`(base64 PNG 스프라이트시트), `w,h`(프레임 크기), `c`(열 수), `n`(프레임 수), `d`(프레임 시간 ms, 숫자 또는 배열), `s`(이로치 색 치환표 "RRGGBBrrggbb,...")
@@ -100,6 +102,7 @@
 - `build_abil_items.py` — 특성캡슐·특성패치 아이콘(직접 그림)
 - `build_den.py` — 작은 숲의 다이맥스 굴 그림 `map/den.png`·거다이맥스 굴 `map/gden.png`
 - `build_items.py` — 도구 데이터 `ITEMS`(PokéAPI 한국어 이름, 메가스톤은 FORMS와 짝)와 아이콘 `it/`
+- `build_offline.py` — 오프라인 파일 목록 `offline.json`(git 해시). 에셋을 바꾸면 git add 뒤에 돌린다
 - `build_effects.py` — 기술 추가 효과 표 `MVX`를 index.html에 넣는다(Showdown `moves.json` 사용, 다시 돌리면 그 줄만 바뀐다). build_status 뒤에 돌린다
 
 ## 배포

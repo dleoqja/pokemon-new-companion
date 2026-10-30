@@ -1,0 +1,16 @@
+{
+  "name": "포켓몬: 숲속 동료",
+  "short_name": "숲속 동료",
+  "description": "설치 없이 브라우저에서 바로 하는 비공식 포켓몬 팬게임.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f151c",
+  "theme_color": "#0f151c",
+  "lang": "ko",
+  "icons": [
+    { "src": "favicon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "favicon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

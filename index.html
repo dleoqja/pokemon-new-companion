@@ -1529,11 +1529,11 @@ function tickEnts(dt){
 const fieldSpr={};
 function fieldSprite(id,sh){ const k=id+(sh?'s':''); if(fieldSpr[k]===undefined){ fieldSpr[k]=null; getSprite(id,false,sh).then(v=>fieldSpr[k]=v).catch(()=>{}); } return fieldSpr[k]; }
 function drawMon(id,sh,x,y,dir,frame,alpha){
-  // 합체 포켓몬: 큐레무는 wk/fuse.png(FUSE의 wk번째 칸), 네크로즈마는 걷기 도트가 없어서 정지 그림(ic/e{id}.png)
+  // 합체 포켓몬: 큐레무는 wk/fuse.png(FUSE의 wk번째 칸), 네크로즈마는 걷기 도트가 없어서 걷기 도트 없는 포켓몬처럼 아이콘(ic/e{id}.png)으로
   const big=id>=10000&&!FUSE[id];
   cx.globalAlpha=alpha==null?1:alpha;
   cx.fillStyle='rgba(0,0,0,.22)'; cx.beginPath(); cx.ellipse(x+12,y+21,big?13:8,big?4:3,0,0,7); cx.fill();
-  if(FUSE[id]&&!FUSE[id].wk){ const ic=loadImg(icAt(id,sh)); if(ic.complete&&ic.naturalWidth) cx.drawImage(ic,x-12,y-26,48,48); cx.globalAlpha=1; return; }
+  if(FUSE[id]&&!FUSE[id].wk){ const ic=loadImg(icAt(id,sh)); if(ic.complete&&ic.naturalWidth) cx.drawImage(ic,x-8,y-18-(frame%2),40,40); cx.globalAlpha=1; return; }
   if(FUSE[id]){ const img=loadImg('wk/fuse.png');
     if(img.complete&&img.naturalWidth){ cx.drawImage(img,(FUSE[id].wk-1)*4*48+frame*48,dir*48,48,48,Math.round(x-12),Math.round(y-24),48,48); cx.globalAlpha=1; return; } }
   if(id>=10000){

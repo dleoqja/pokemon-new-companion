@@ -255,6 +255,10 @@ body.wide .pad{flex-wrap:wrap;justify-content:center}
 .row-btns{display:flex;gap:8px}
 #dblX{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:40;flex:none;width:max-content;max-width:92%;font-size:14px;padding:8px 12px}
 .btn{flex:1;border:0;border-radius:6px;padding:12px;font-size:17px;background:var(--frame-hi);box-shadow:0 0 0 2px #000;color:#fff}
+.slots{display:flex;flex-direction:column;gap:8px}
+.slt{display:flex;align-items:center;gap:10px;text-align:left;padding:6px 10px;min-height:56px}.slt:disabled{opacity:.45}
+.slt .spr{--sp:48px;flex:none}.slt-n{flex:none;width:22px;font-size:18px;color:#8496a3;text-align:center}
+.slt-t{display:flex;flex-direction:column;gap:2px;min-width:0}.slt-t b{font-weight:400;font-size:15px}.slt-t small{font-size:12px;color:#8496a3}
 .btn.go{background:var(--red)}
 .kickN{flex:1;align-self:center;font-size:16px;color:#fff}
 .prow{display:flex;align-items:center;gap:10px;background:var(--paper);color:var(--ink);border:3px solid #000;border-radius:8px;padding:6px 8px}
@@ -5666,7 +5670,11 @@ function gameOver(){
 /* ================= 이어하기 (새로고침하거나 창을 닫았다 열어도) =================
    숲에 있을 때 몇 초마다, 층을 옮길 때, 배틀 시작 직전, 배틀이 끝난 뒤 localStorage에 저장한다.
    배틀 중에는 저장하지 않으니 배틀 도중 새로고침하면 배틀 시작 직전으로 돌아간다(도망친 것과 같다). 게임 오버면 지운다 */
-const RUN_KEY='kr2-run';
+// 저장 칸 5개. 1번 칸은 예전 이어하기 자리(kr2-run) 그대로라 예전 저장이 1번 칸에 들어 있다.
+// 지금 쓰는 칸 curSlot은 새로고침해도 이어지게 sessionStorage kr-slot에도 둔다
+const SLOTS=5, runKey=i=>i?`kr2-run-${i+1}`:'kr2-run';
+let curSlot=0; try{ curSlot=Math.min(SLOTS-1,Math.max(0,+sessionStorage.getItem('kr-slot')||0)); }catch(_){}
+function useSlot(i){ curSlot=i; try{ sessionStorage.setItem('kr-slot',String(i)); }catch(_){} }
 let lastSave=0;
 function saveRun(){
   if(DUEL) return;
@@ -5675,10 +5683,11 @@ function saveRun(){
   const s={v:1,t:Date.now(),party:party.map(m=>{ const o={...m}; delete o.v; delete o.plan; return o; }),act,bag,
     floor,reached,wins,winsFloor,cleared,bossSeen:[...bossSeen],bossDown:[...bossDown],nestDown:[...nestDown],mem:[...floorMem],w,
     px:player.x,py:player.y,dir:player.dir,room:mp?mp.code:null};
-  try{ localStorage.setItem(RUN_KEY,JSON.stringify(s)); }catch(_){}
+  try{ localStorage.setItem(runKey(curSlot),JSON.stringify(s)); }catch(_){}
 }
-function loadRun(){ try{ const s=JSON.parse(localStorage.getItem(RUN_KEY)); return s&&s.v===1&&s.party&&s.party.length?s:null; }catch(_){ return null; } }
-function delRun(){ try{ localStorage.removeItem(RUN_KEY); }catch(_){} }
+function loadRun(i=curSlot){ try{ const s=JSON.parse(localStorage.getItem(runKey(i))); return s&&s.v===1&&s.party&&s.party.length?s:null; }catch(_){ return null; } }
+function delRun(i=curSlot){ try{ localStorage.removeItem(runKey(i)); }catch(_){} }
+const allRuns=()=>Array.from({length:SLOTS},(_,i)=>loadRun(i));
 addEventListener('pagehide',()=>{ if(mode==='world'||mode==='room'||mode==='bwait') saveRun(); });
 document.addEventListener('visibilitychange',()=>{ if(document.hidden&&(mode==='world'||mode==='room'||mode==='bwait')) saveRun(); });
 async function resumeRun(s){
@@ -6894,7 +6903,7 @@ const HELP=[
     ['목표',['숲 <b>15층</b>의 무한다이맥스 무한다이노를 쓰러뜨리면 엔딩. 그 뒤로도 계속 올라갈 수 있다.','처음 포켓몬은 룰렛으로 정한다. 절반 확률로 이로치(색이 다른 포켓몬)가 나온다.']],
     ['숲',['풀숲을 걸으면 가끔 야생 포켓몬이 튀어나온다. 돌아다니는 야생 포켓몬에 닿아도 배틀이 시작된다.','위쪽 출구는 <b>보스</b>가 막고 있다. 보스를 이기면 다음 층으로 갈 수 있다.','아래쪽 입구로 나가면 지나온 층으로 내려간다.','새 층에 처음 오면 파티의 HP·PP·상태이상이 모두 회복된다. 바닥의 회복약은 HP와 상태이상을 회복한다.','야생에서는 전설·환상 포켓몬이 나오지 않는다(10층부터 보스로만). 야생 이로치는 10%.']],
     ['레벨 제한',['지금 잡아야 할 보스 레벨 <b>+3</b>까지만 오른다. 제한에 닿으면 경험치가 더 쌓이지 않는다.','보스를 이기면 그 배틀의 경험치부터 다음 층 기준으로 풀린다.']],
-    ['저장과 게임 오버',['숲에 있으면 자동으로 저장된다. 시작 화면의 이어하기로 계속한다.','배틀 도중 끄거나 새로고침하면 그 배틀 직전으로 돌아간다.','파티가 모두 쓰러지면 게임 오버. 1층부터 다시 시작한다.']],
+    ['저장과 게임 오버',['숲에 있으면 자동으로 저장된다. 저장 칸은 5개이고, 시작 화면의 불러오기로 골라서 계속한다. 새 모험은 출발할 때 저장할 칸을 고른다.','배틀 도중 끄거나 새로고침하면 그 배틀 직전으로 돌아간다.','파티가 모두 쓰러지면 게임 오버. 1층부터 다시 시작한다.']],
   ]],
   ['조작',[
     ['이동',['키보드: WASD 또는 방향키','휴대폰: 화면 십자키. 누른 채로 손가락을 미끄러뜨리면 방향이 바뀐다.']],
@@ -6982,14 +6991,35 @@ const starterSet=new Set(STARTERS.flat());
 const basics=MON.filter(s=>!s.f&&!s.L&&bst(s)<=330&&s.e.length&&!starterSet.has(s.id));
 const SPOOL=[...new Set([...STARTERS.flat(),...basics.map(x=>x.id)])];
 function start(){ showStart(); }
+// 저장 칸 고르기. how 'load': 저장된 칸을 골라 이어서 한다. 'new': 새 모험을 저장할 칸(저장이 있으면 지워도 되는지 묻는다)
+function slotLine(s){
+  const m=s.party[s.act]||s.party[0], d=new Date(s.t);
+  return `${sprHTML(m.id,m.sh)}<span class="slt-t"><b>숲 ${s.floor}층 · ${m.nick||sp(m.id).n} Lv${m.lv}${s.party.length>1?` 외 ${s.party.length-1}마리`:''}</b><small>${d.getMonth()+1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}</small></span>`;
+}
+function openSlots(how,onPick,onBack=showStart){
+  const runs=allRuns();
+  ov(`<h2>${how==='load'?'불러오기':'어느 칸에 저장할까?'}</h2>
+    <div class="slots">${runs.map((s,i)=>`<button class="btn slt" data-s="${i}" type="button"${how==='load'&&!s?' disabled':''}><span class="slt-n">${i+1}</span>${s?slotLine(s):'<span class="slt-t"><b>빈 칸</b></span>'}</button>`).join('')}</div>
+    <div class="row-btns"><button class="btn" id="sltBack" type="button">뒤로</button></div>`,'title');
+  $('sltBack').onclick=onBack;
+  $('sheet').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.s, s=runs[i];
+    if(how==='load'){ useSlot(i); resumeRun(s); return; }
+    if(!s){ onPick(i); return; }
+    ov(`<h2>${i+1}번 칸에 덮어쓸까?</h2><p>이 칸의 기록이 지워진다.</p><div class="slots"><div class="btn slt" style="pointer-events:none">${'<span class="slt-n">'+(i+1)+'</span>'+slotLine(s)}</div></div>
+      <div class="row-btns"><button class="btn go" id="sltYes" type="button">네</button><button class="btn" id="sltNo" type="button">아니요</button></div>`,'title');
+    $('sltYes').onclick=()=>{ delRun(i); onPick(i); };
+    $('sltNo').onclick=()=>openSlots(how,onPick,onBack);
+  });
+}
 function showStart(){
   mode='title';
-  const K=40, CW=72, seq=Array.from({length:K},()=>pickR(SPOOL)), sv=loadRun(), sl=sv&&(sv.party[sv.act]||sv.party[0]);
+  const K=40, CW=72, seq=Array.from({length:K},()=>pickR(SPOOL)), sv=allRuns().some(Boolean);
   ov(`<div class="logo">포켓몬: 숲속 동료</div>
     <p class="logo-sub">${sv?'새로 하려면 ':''}룰렛을 돌려 스타팅 포켓몬을 고르세요</p>
     <div class="roul" id="roul"><div class="strip" id="strip">${[0,1,2].map(()=>seq.map(id=>`<span class="cell">${sprHTML(id)}</span>`).join('')).join('')}</div><span class="pin"></span></div>
     <div class="rres" id="rres"></div>
-    ${sv?`<div class="row-btns"><button class="btn go" id="resume" type="button">이어하기 · 숲 ${sv.floor}층 · ${sl.nick||sp(sl.id).n} Lv${sl.lv}${sv.party.length>1?` 외 ${sv.party.length-1}마리`:''}</button></div>`:''}
+    ${sv?`<div class="row-btns"><button class="btn go" id="resume" type="button">불러오기</button></div>`:''}
     <div class="row-btns"><button class="btn go" id="spin" type="button">돌리기</button></div>
     <div class="row-btns"><button class="btn" id="mpBtn" type="button">${mp?`방 ${mp.code} · ${mp.peers.length}명 (나가기)`:'멀티 (방 코드)'}</button></div>
     <div class="row-btns"><button class="btn" id="helpBtn" type="button">도움말</button></div>
@@ -6997,7 +7027,7 @@ function showStart(){
   $('mpBtn').onclick=()=>{ if(mp){ mpLeave(); showStart(); } else openRoom(); };
   $('helpBtn').onclick=()=>openHelp();
   $('credBtn').onclick=openCredits;
-  if(sv) $('resume').onclick=()=>resumeRun(sv);
+  if(sv) $('resume').onclick=()=>openSlots('load');
   const strip=$('strip'), reel=reelRun($('roul'),strip,K,CW,idx=>{
     const id=seq[idx], sh=Math.random()<START_SHINY, cell=strip.children[K+idx];
     cell.classList.add('win');
@@ -7045,7 +7075,7 @@ function showGoal(id,sh){
     <div class="row-btns"><button class="btn go" id="goBtn" type="button">출발</button></div>`,'title');
   const gc=$('goalMon');
   getSprite(10190,false,false).then(sv=>{ if(!gc.isConnected) return; gc.width=sv.w; gc.height=sv.h; gc.style.width=Math.round(Math.min(sv.w*.75,120))+'px'; anims.set(gc,{s:sv,t0:performance.now()}); }).catch(()=>{});
-  $('goBtn').onclick=()=>{ anims.delete(gc); begin(id,sh); };
+  $('goBtn').onclick=()=>{ anims.delete(gc); openSlots('new',i=>{ useSlot(i); begin(id,sh); },()=>showGoal(id,sh)); };
 }
 function begin(id,sh){
   cleared=false; leaveRoomNow();
@@ -7109,7 +7139,7 @@ $('optW').onclick=()=>{ if((mode==='world'||mode==='room')&&$('ov').hidden) open
 // 나가기: 지금까지 저장하고 시작 화면으로 (이어하기로 계속). 방에 있으면 연결은 그대로 두고 숲에서만 빠진다. back: 아니요를 누르면 돌아갈 곳(설정 창)
 function quitAsk(back){
   for(const k in held) held[k]=0;
-  ov(`<h2>시작 화면으로 나갈까?</h2><p>지금 상태가 저장되고, 이어하기로 계속할 수 있다.</p>
+  ov(`<h2>시작 화면으로 나갈까?</h2><p>지금 상태가 저장되고, 불러오기로 계속할 수 있다.</p>
     <div class="row-btns"><button class="btn" id="qNo" type="button">아니요</button><button class="btn go" id="qYes" type="button">나간다</button></div>`);
   $('qNo').onclick=()=>(back||closeOv)();
   $('qYes').onclick=()=>{

@@ -1351,7 +1351,7 @@ function myState(){
 }
 // 내 위치를 보낸다 (바뀌었을 때 + 1.5초마다)
 let lastMe='', lastMeT=0, lastPty='', lastPtyT=0;
-const ptyOut=()=>(DUEL?DUEL.real:party).map(m=>{ const o={id:m.id,lv:m.lv,sh:!!m.sh,g:m.g,hp:m.hp,exp:m.exp,moves:m.moves,abs:m.abs,nat:m.nat,fr:m.fr}; if(m.nick) o.nick=m.nick; if(m.item) o.item=m.item; if(m.gmax) o.gmax=1; if(m.st) o.st=m.st; if(m.pp) o.pp=m.pp; return o; });
+const ptyOut=()=>(DUEL?DUEL.real:party).map(m=>{ const o={id:m.id,lv:m.lv,sh:!!m.sh,g:m.g,hp:m.hp,exp:m.exp,moves:m.moves,abs:m.abs,nat:m.nat,fr:m.fr}; if(m.nick) o.nick=m.nick; if(m.item) o.item=m.item; if(m.gmax) o.gmax=1; if(m.dx) o.dx=1; if(m.st) o.st=m.st; if(m.pp) o.pp=m.pp; return o; });
 function mpTick(t){
   if(!mp||!player) return;
   // 연결이 끊기는 중인데 알림이 안 오는 경우도 있어서 직접 확인한다

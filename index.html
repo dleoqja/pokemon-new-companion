@@ -240,6 +240,10 @@ body.wide .pad{flex-wrap:wrap;justify-content:center}
 .ld-h{margin:-6px 0 0;font-size:13px;color:#8a9aa6;text-align:center}
 .logo{font-size:clamp(28px,8.4vw,40px);line-height:1.1;text-wrap:balance;color:#fff;text-shadow:3px 3px 0 var(--red);text-align:center}
 .logo-sub{margin:-4px 0 0;text-align:center;font-size:15px;color:#b6c3cc}
+.credit{margin:2px 0 0;text-align:center;font-size:12px;color:#8496a3}
+.credit .lnk{background:none;border:0;padding:0;font:inherit;color:#b6c3cc;text-decoration:underline;cursor:pointer}
+.cred{margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:#c9d4db}
+.cred a{color:#ff9b8f}
 .logo small{display:block;font-family:var(--f-px);font-size:11px;letter-spacing:.2em;color:#9fb0bd;text-shadow:none;margin-top:8px}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .pick{background:var(--paper);color:var(--ink);border:3px solid #000;border-radius:6px;padding:6px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:2px}
@@ -6944,6 +6948,23 @@ function typeChart(){
     <div class="tchart"><table><thead><tr><th></th>${ids.map(d=>`<th style="background:${TY[d][1]}" title="${TY[d][0]}">${ab(d)}</th>`).join('')}</tr></thead>
     <tbody>${ids.map(a=>`<tr><th style="background:${TY[a][1]}">${TY[a][0]}</th>${ids.map(d=>cell(EFF[a][d])).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
+// 시작 화면 아래 버전과 에셋 출처
+const VER='1.0';
+function openCredits(){
+  const a=(u,s)=>`<a href="${u}" target="_blank" rel="noopener">${s}</a>`;
+  ov(`<h2>에셋 출처</h2>
+    <ul class="cred">
+      <li>포켓몬·기술·특성·도구 데이터: ${a('https://pokeapi.co/','PokéAPI')}</li>
+      <li>배틀 도트·아이콘·도구 아이콘: ${a('https://github.com/PokeAPI/sprites','PokéAPI sprites')}</li>
+      <li>필드 걷기 도트: ${a('https://sprites.pmdcollab.org/','PMD SpriteCollab')} 기여자들 (CC BY-NC 4.0)</li>
+      <li>기술 이펙트·기술 효과 데이터: ${a('https://pokemonshowdown.com/','Pokémon Showdown')}</li>
+      <li>글꼴: Do Hyeon, Silkscreen (${a('https://fonts.google.com/','Google Fonts')}, SIL OFL)</li>
+    </ul>
+    <p class="note">포켓몬과 관련된 이름·그림의 권리는 Nintendo, Creatures Inc., GAME FREAK inc.에 있습니다. 이 게임은 위 회사들과 관련이 없는 비공식·비상업 팬게임입니다.</p>
+    <p class="note">버전 ${VER}</p>
+    <div class="row-btns"><button class="btn" id="credBack" type="button">뒤로</button></div>`,'title');
+  $('credBack').onclick=showStart;
+}
 function openHelp(tab=0,back=showStart){
   const [, secs]=HELP[tab];
   const body=secs?secs.map(([h,l])=>`<div class="ab-box hp-sec"><h3>${h}</h3><ul>${l.map(x=>`<li>${x}</li>`).join('')}</ul></div>`).join(''):typeChart();
@@ -6971,9 +6992,11 @@ function showStart(){
     ${sv?`<div class="row-btns"><button class="btn go" id="resume" type="button">이어하기 · 숲 ${sv.floor}층 · ${sl.nick||sp(sl.id).n} Lv${sl.lv}${sv.party.length>1?` 외 ${sv.party.length-1}마리`:''}</button></div>`:''}
     <div class="row-btns"><button class="btn go" id="spin" type="button">돌리기</button></div>
     <div class="row-btns"><button class="btn" id="mpBtn" type="button">${mp?`방 ${mp.code} · ${mp.peers.length}명 (나가기)`:'멀티 (방 코드)'}</button></div>
-    <div class="row-btns"><button class="btn" id="helpBtn" type="button">도움말</button></div>`,'title');
+    <div class="row-btns"><button class="btn" id="helpBtn" type="button">도움말</button></div>
+    <p class="credit">v${VER} · <button class="lnk" id="credBtn" type="button">에셋 출처</button></p>`,'title');
   $('mpBtn').onclick=()=>{ if(mp){ mpLeave(); showStart(); } else openRoom(); };
   $('helpBtn').onclick=()=>openHelp();
+  $('credBtn').onclick=openCredits;
   if(sv) $('resume').onclick=()=>resumeRun(sv);
   const strip=$('strip'), reel=reelRun($('roul'),strip,K,CW,idx=>{
     const id=seq[idx], sh=Math.random()<START_SHINY, cell=strip.children[K+idx];

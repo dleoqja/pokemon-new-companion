@@ -1207,6 +1207,13 @@ function kickAsk(id){
   $('kNo').onclick=roomList;
   $('kYes').onclick=()=>{ closeOv(); if(mp&&mp.id===mp.host){ mpSend({t:'kick',to:id}); toast(`${n} 님을 내보냈다`); } };
 }
+// 다른 사람이 있는 방에 새로 들어왔다: 혼자 하던 숲의 기억(지나온 층·쓰러뜨린 보스·둥지)은 버리고 방의 것을 받는다(bclr·nclr·fsave).
+// 안 그러면 옛 기억이 fsave·bclr로 방 전체에 퍼져 친구 숲의 보스가 사라지거나 바뀐다. 게임 중이면 지금 층 하나만 그대로 둔다
+function forgetForest(keepHere){
+  const down=keepHere&&onFloor&&onFloor===floor&&!bossAlive;
+  floorMem.clear(); bossDown.clear(); nestDown.clear(); nestTaken.clear();
+  if(down) bossDown.add(floor);
+}
 // 게임 중에 방에 들어왔다: 지금 층·파티 그대로. 그 층에 먼저 와 있던 사람이 있으면 그 사람 숲으로 맞춘다(mpTick)
 function mpJoinMid(){ myFs=99; mp.synced=null; mp.lastFH=null; mp.world=true; lastEnts=''; }
 // 연결이 끊기면: 여럿이 배틀은 혼자 계속, 보스 앞에서 기다리던 중이면 그만 기다린다
@@ -1346,7 +1353,7 @@ function mpOn(m){
     // 방장이 나에게 보내는 답
     case 'engaged': { mp.engaging=null; const e=ents.find(x=>x.k===m.k); if(m.ok&&e&&mode==='world'&&$('ov').hidden) startBattle(e); else if(m.ok) fhSend({t:'battleEnd',k:m.k,how:'skip'}); return; }
     case 'bump': { const e=ents.find(x=>x.k===m.k); if(e&&mode==='world'&&$('ov').hidden&&!player.inv) startBattle(e); else fhSend({t:'battleEnd',k:m.k,how:'skip'}); return; }
-    case 'healed': usePotion(); return;
+    case 'healed': gotPotion(); return;
     case 'gotb': gotBerry(m.b); return;
     // 2대2
     case 'jreq': dblOnReq(m); return;
@@ -1462,13 +1469,15 @@ function stepAnim(e,dt,dur){
   e.px=(e.fx+(e.x-e.fx)*k)*T; e.py=(e.fy+(e.y-e.fy)*k)*T;
   if(k>=1){e.moving=false;e.px=e.x*T;e.py=e.y*T;}
 }
-function usePotion(){
-  party.forEach(m=>{m.hp=maxhp(m); m.st=null;}); whud();
-  toast('회복약을 주웠다!'); say(`회복약을 썼다. 파티 전원의 HP와 상태이상이 회복됐다! (남은 회복약 ${items.filter(i=>!i.b).length}개)`);
+// 회복약은 주우면 가방에 들어가고, 가방에서 쓰면 파티 전원 회복
+function gotPotion(){
+  if(!invAdd('potion')){ toast(`가방이 꽉 차서 회복약을 바로 썼다`); return healParty(); }
+  toast('회복약을 주웠다!'); say(`회복약을 주웠다! 가방에 넣었다. (${bag.inv.length}/${INV_MAX}) · 남은 회복약 ${items.filter(i=>!i.b).length}개`); saveRun();
 }
+function healParty(){ party.forEach(m=>{m.hp=maxhp(m); m.st=null;}); whud(); say('회복약을 썼다. 파티 전원의 HP와 상태이상이 회복됐다!'); }
 function onArrive(){
   const it=items.find(i=>i.x===player.x&&i.y===player.y);
-  if(it&&it.b&&(bag.inv||[]).length>=INV_MAX){ toast(`가방이 꽉 찼다 (${INV_MAX}칸)`); }
+  if(it&&(bag.inv||[]).length>=INV_MAX){ toast(`가방이 꽉 찼다 (${INV_MAX}칸)`); }
   else if(it&&it.b){
     if(mp&&!isHost()) fhSend({t:'take',x:it.x,y:it.y});
     else { items=items.filter(i=>i!==it); if(mp) mpSend({t:'items',fl:floor,l:items.map(itemOut)}); gotBerry(it.b); }
@@ -1476,7 +1485,7 @@ function onArrive(){
   else if(it){
     // 멀티: 먼저 요청한 사람이 가져간다 (방장이 정한다)
     if(mp&&!isHost()) fhSend({t:'take',x:it.x,y:it.y});
-    else { items=items.filter(i=>i!==it); if(mp) mpSend({t:'items',fl:floor,l:items.map(itemOut)}); usePotion(); }
+    else { items=items.filter(i=>i!==it); if(mp) mpSend({t:'items',fl:floor,l:items.map(itemOut)}); gotPotion(); }
   }
   if(grace>0){grace--; return;}
   if(map[player.y][player.x]===TALL&&Math.random()<GRASS){
@@ -2776,9 +2785,9 @@ async function useMove(x,mid,pick,called){
   const t=mvType(x,mid);
   // 큰비에서는 불꽃, 아주 강한 햇살에서는 물 공격 기술이 사라진다
   if(bt.wx&&bt.wx.strong&&((bt.wx.k==='rain'&&t===10)||(bt.wx.k==='sun'&&t===11))){ await wait(250); return fail(bt.wx.k==='rain'?'강한 비 때문에 불꽃 공격은 사라져 버렸다!':'아주 강한 햇살 때문에 물 공격은 증발해 버렸다!'); }
-  const spread=tg.length>1;
+  const spread=tg.length>1, wide=X(mid).ta==='af'||X(mid).ta==='aa'||(!!x.rage&&tg.length>1);  // wide: 범위 기술(와이드가드가 막는다). 맞을 상대가 하나만 남아도 범위 기술
   let total=0, done=0;
-  for(const y of tg){ if(y.hp<=0) continue; const r=await hitOne(x,y,mid,{t,contact,prio,spread,dm}); total+=r.total; done+=r.done; if(x.hp<=0) break; }
+  for(const y of tg){ if(y.hp<=0) continue; const r=await hitOne(x,y,mid,{t,contact,prio,spread,wide,dm}); total+=r.total; done+=r.done; if(x.hp<=0) break; }
   if(id==='bide') delete v.bide;
   if(SELFKO.has(id)&&!dm&&x.hp>0){ x.hp=0; updHP(hudOf(x),x); }
   if(!done){
@@ -2850,7 +2859,8 @@ async function hitOne(x,y,mid,c){
   }
   // 패스트가드·와이드가드·마룻바닥세워막기: 이번 턴 우리 편을 지킨다
   { const ysc=SC(sideOf(y)), tn=bt.turnNo;
-    if(foeHit&&!dm&&tn&&((ysc.qg===tn&&c.prio>0)||(ysc.wg===tn&&c.spread)||ysc.mat===tn)){ await wait(250); say(`${josa(who(y),'은/는')} 공격으로부터 몸을 지켰다!`); await wait(800); v.failed=true; return res; } }
+    // 와이드가드는 같은 편이 쓴 범위 기술(지진 등)·폭주로 상대 전체를 치는 다이맥스 기술도 막는다
+    if(tn&&((ysc.wg===tn&&c.wide&&(!dm||x.rage))||(foeHit&&!dm&&((ysc.qg===tn&&c.prio>0)||ysc.mat===tn)))){ await wait(250); say(`${josa(who(y),'은/는')} 공격으로부터 몸을 지켰다!`); await wait(800); v.failed=true; return res; } }
   if(!dm){
     if(c.prio>0&&bt.ter&&bt.ter.k==='psychic'&&grounded(y)&&foeHit) return missed(`${josa(who(y),'은/는')} 사이코필드에 보호받고 있다!`);
     if(c.prio>0&&foeHit&&blocksPriority(x,y)){ abBar(y); return missed(`${josa(W,'은/는')} ${josa(MV[mid].n,'을/를')} 쓸 수 없다!`); }
@@ -3894,7 +3904,7 @@ function itemTxt(id){
   if(id==='dna-splicers') return '큐레무와 제크로무(블랙큐레무)·레시라무(화이트큐레무)를 합체시킨다. 합체한 큐레무에 다시 쓰면 둘로 돌아간다. 써도 없어지지 않는다.';
   if(id==='n-solarizer') return '네크로즈마와 솔가레오를 합체시킨다(황혼의갈기). 합체한 네크로즈마에 다시 쓰면 둘로 돌아간다. 써도 없어지지 않는다.';
   if(id==='n-lunarizer') return '네크로즈마와 루나아라를 합체시킨다(새벽의날개). 합체한 네크로즈마에 다시 쓰면 둘로 돌아간다. 써도 없어지지 않는다.';
-  if(id==='potion') return '사면 바로 파티 전원의 HP와 상태이상을 회복한다.';
+  if(id==='potion') return '가방에 넣어 두었다가 쓰면 파티 전원의 HP와 상태이상을 회복한다.';
   if(id==='band') return '배틀마다 한 번, 파티 누구든 3턴 동안 다이맥스할 수 있다.';
   if(id==='candy10') return '이상한사탕 10개. 고른 포켓몬의 레벨이 1씩 오른다.';
   if(ITEMS[id]&&ITEMS[id].c==='m') return mintTxt(id);
@@ -4114,6 +4124,7 @@ function bagItem(i){
   if(id==='soup') return useSoup(i);
   if(id==='ability-capsule'||id==='ability-patch') return useAbil(i);
   if(id==='rare-candy') return useBagCandy(i);
+  if(id==='potion') return useBagPotion(i);
   ov(`<div class="itm-h">${itemIcon(id,'iic big')}<div><h2>${itemName(id)}</h2><p>${itemTxt(id)}</p>${ex.length?`<p class="note">전용: ${[...new Set(ex)].map(s=>sp(s).n).join('·')}</p>`:''}</div></div>
     <span class="lbl">누구에게 지니게 할까?</span>
     <div class="list">${party.map((m,j)=>pmHTML(m,j,false,false)).join('')}</div>
@@ -4528,9 +4539,14 @@ async function playActs(acts){
   await endTurn();
   if(await faintCheck()) return;
   if(DBL&&await dblReplace()) return;
-  for(const m of actives()) if(m.dmax>0&&!m.dinf){ m.dmax--; if(m.dmax<=0){ m.dmax=1; await endDmax(m,sideOf(m)); } else refreshHud(m); }
+  await dmaxTick();
   busy=false; renderCmd();
   if(DBL) dblTurnDone();
+}
+// 다이맥스는 3턴: 턴이 끝날 때마다 하나씩 줄인다. 상대가 쓰러져 턴이 일찍 끝나도(결투 등) 꼭 한 번(bt.dmT)
+async function dmaxTick(){
+  if(bt.dmT===bt.turnNo) return; bt.dmT=bt.turnNo;
+  for(const m of actives()) if(m.dmax>0&&!m.dinf){ m.dmax--; if(m.dmax<=0){ m.dmax=1; await endDmax(m,sideOf(m)); } else refreshHud(m); }
 }
 // 배틀에서 빠질 때: 능력 변화·혼란 등은 사라지고, 맹독 카운트는 처음으로
 function leaveField(m){ delete m.v; if(m.st&&m.st.k==='tox') m.st.n=1; }
@@ -4692,7 +4708,9 @@ function tradeMsg(m){
    두 화면이 같은 배틀을 돌린다: 내 포켓몬은 늘 아래(SL.p), 상대는 위(SL.e). 난수 순서가 같도록 신청한 사람(A) 편을 늘 먼저 처리한다(onField·SIDES·명령 순서).
    매 턴 명령 dcmd를 서로 보내고, 교체할 포켓몬은 dsw로 알린다 */
 const duelTeam=()=>JSON.parse(JSON.stringify(ptyOut()));
-function duelFresh(l){ return l.slice(0,6).filter(x=>x&&sp(x.id)).map(x=>{ const m={...x}; if(m.nick) m.nick=cleanNick(m.nick)||undefined; if(!m.nick) delete m.nick; m.st=null; m.pp={}; delete m.v; m.hp=maxhp(m); return m; }); }
+// 결투 동안만 모두 Lv50 (원래 파티는 DUEL.real에 그대로)
+const DUEL_LV=50;
+function duelFresh(l){ return l.slice(0,6).filter(x=>x&&sp(x.id)).map(x=>{ const m={...x}; m.lv=DUEL_LV; if(m.nick) m.nick=cleanNick(m.nick)||undefined; if(!m.nick) delete m.nick; m.st=null; m.pp={}; delete m.v; m.hp=maxhp(m); return m; }); }
 const duelIn=new Map(), duelOut=new Map();  // 받은 신청·보낸 신청 (id → 시각)
 const DUEL_REQ_MS=60000;
 function duelForget(id){ duelIn.delete(id); duelOut.delete(id); }
@@ -4800,7 +4818,7 @@ async function startDuel(id,A,seed,mine,theirs,band){
   renderCmd();
   await Promise.race([ld,sleep(9000)]); say('');
   await wipe(false,220);
-  say(`${escN(name)} 님과 결투를 시작한다! 모두 HP가 가득 찼다.`); await wait(1200);
+  say(`${escN(name)} 님과 결투를 시작한다! 결투 동안은 모두 Lv${DUEL_LV}, HP가 가득 찼다.`); await wait(1200);
   say(`${escN(name)} 님은 ${josa(showN(enemy),'을/를')} 내보냈다!`); await slideIn($('eImg')); if(lookOf(enemy).sh) await sparkle($('eImg')); $('eHud').style.visibility='visible'; await wait(500);
   say(`가랏, ${showN(party[act])}!`); await sendOut($('pImg')); if(party[act].sh) await sparkle($('pImg')); $('pHud').style.visibility='visible'; await wait(300);
   for(const m of actives().sort((a,b)=>speed(b)-speed(a))) await abEntry(m);
@@ -4886,6 +4904,7 @@ async function duelAfterFaint(){
   if(!DUEL) return true;
   DUEL.inTurn=false;
   if(DUEL.gone){ await duelEnd('gone'); return true; }
+  await dmaxTick();
   busy=false; renderCmd(); return true;
 }
 // 결투 끝: 원래 파티(결투 전 HP 그대로)로 숲에 돌아간다
@@ -5220,14 +5239,15 @@ function bossMine(m){
 
 /* --- 턴 --- */
 // 대상을 골라야 하는 기술: 상대 하나를 맞히는 기술이고 상대가 둘 이상일 때
-const needTarget=mid=>{ const x=X(mid); if(foes(SL.p[myI]).length<2||ALLY.has(x.id)||HAZ[x.id]) return false; if(MV[mid].c==='x') return x.tg==='f'&&x.ta!=='af'; return !x.ta; };
+// 다이맥스 기술은 공격이면 늘 상대 하나(범위 기술도), 변화기는 다이월(자신)
+const needTarget=mid=>{ const me=SL.p[myI], x=X(mid); if(foes(me).length<2) return false; if(me&&(me.dmax>0||bt.armD&&canDmax(me))) return MV[mid].c!=='x'; if(ALLY.has(x.id)||HAZ[x.id]) return false; if(MV[mid].c==='x') return x.tg==='f'&&x.ta!=='af'; return !x.ta; };
 const effTag=e=>e===0?'<span class="ef">효과 없음</span>':e>1?'<span class="ef up">효과 굉장</span>':e<1?'<span class="ef">별로</span>':'';
 // 대상 고르기: 상대 이름 위에 이 기술의 상성(효과 없음·별로·효과 굉장)을 띄운다
 function pickTarget(a){
   const c=$('cmd'), fs=SL.e.map((e,i)=>e&&e.hp>0?[e,i]:null).filter(Boolean), p=party[act], st=MV[a.mv].c==='x';
   const ef=e=>st?'':effTag(effFor(a.mv,mvType(p,a.mv),e.ill?{id:e.ill.id,v:e.v}:e,p));
   c.innerHTML=`<div class="subs tgs">${fs.map(([e,i])=>`<button class="sub tg" type="button" data-t="e${i}">${ef(e)}${showN(e)} Lv${e.lv}</button>`).join('')}</div><div class="subs"><button class="sub" id="tgX" type="button">취소</button></div>`;
-  say(`${josa(MV[a.mv].n,'을/를')} 누구에게 쓸까?`);
+  say(`${josa(p.dmax>0||bt.armD&&canDmax(p)?maxName(p,MV[a.mv]):MV[a.mv].n,'을/를')} 누구에게 쓸까?`);
   c.querySelectorAll('[data-t]').forEach(b=>{
     const k=b.dataset.t; b.onmouseenter=()=>hudOf(slotMon(k)).classList.add('on'); b.onmouseleave=()=>hudOf(slotMon(k)).classList.remove('on');
     b.onclick=()=>{ hudOf(slotMon(k)).classList.remove('on'); turn({...a,tgt:k}); };
@@ -5757,7 +5777,7 @@ function openRoom(inGame){
     <div class="row-btns"><button class="btn" id="mpBack" type="button">뒤로</button></div>`,inGame?'room':'title');
   const go=async code=>{
     const name=AUTH?AUTH.nick||AUTH.id:$('mpName').value.trim().slice(0,8)||'트레이너'; if(!AUTH) store('kr-name',name); $('mpErr').textContent='연결하는 중…';
-    try{ await mpConnect(code,name); store('kr-room',code); mpTag(); if(inGame){ closeOv(); mpJoinMid(); } else showStart(); toast(`방 ${code}에 들어왔다`); }
+    try{ await mpConnect(code,name); store('kr-room',code); mpTag(); if(mp.peers.length>1) forgetForest(inGame); if(inGame){ closeOv(); mpJoinMid(); } else showStart(); toast(`방 ${code}에 들어왔다`); }
     catch(_){ $('mpErr').textContent='방에 들어가지 못했어. 코드를 확인하거나(방이 가득 찼을 수도 있어) 잠시 뒤에 다시 해 줘.'; }
   };
   $('mpNew').onclick=()=>go(String(rnd(10000)).padStart(4,'0'));
@@ -5768,7 +5788,7 @@ function gameOver(){
   mode='over'; delRun();
   if(mp&&curWild&&curWild.k!=null){ if(isHost()) entDone(curWild.k,'lose'); else fhSend({t:'battleEnd',k:curWild.k,how:'lose'}); }
   // 층에서 빠진다: 층을 떠날 때처럼 모습을 남기고, 이제 이 층 관리자가 떠날 때 남기는 모습(fsave)을 받는다
-  if(mp&&onFloor===floor){ const w=worldSnap(); floorMem.set(floor,w); if(isHost()) mpSend({t:'fsave',fl:floor,w}); onFloor=0; }
+  if(mp&&onFloor===floor){ const w=worldSnap(); floorMem.set(floor,w); if(isHost()) mpSend({t:'fsave',fl:floor,w}); } onFloor=0;
   stuckOff();
   ov(`<h2>눈앞이 깜깜해졌다…</h2><p>숲 ${floor}층에서 런이 끝났어. 전투 ${wins}번 승리. 최고 기록은 ${best}층.</p>
     <div class="team">${party.map(m=>sprHTML(m.id,m.sh)).join('')}</div>
@@ -6002,8 +6022,8 @@ async function resumeRun(s){
   const m=lead()||party[0]; getSprite(m.id,true,m.sh).catch(()=>{});
   setMode('world'); draw(); toast(`숲 ${floor}층`);
   say(`이어서 한다! 숲 ${floor}층.`);
-  // 방에 있었으면 같은 방에 다시 들어간다 (지금 층·파티 그대로)
-  if(mp) mpJoinMid();
+  // 방에 있었으면 같은 방에 다시 들어간다 (지금 층·파티 그대로). 다른 방(혼자 하던 저장 등)을 불러왔으면 그 숲 기억은 방에 퍼뜨리지 않는다
+  if(mp){ if(s.room!==mp.code&&mp.peers.length>1) forgetForest(true); mpJoinMid(); }
   else if(s.room){
     try{ await mpConnect(s.room,store('kr-name')||'트레이너'); mpTag(); mpJoinMid(); toast(`방 ${s.room}에 다시 들어왔다`); }
     catch(_){ toast('방에 다시 들어가지 못했다. 혼자 계속한다'); }
@@ -6167,9 +6187,9 @@ const SHOPKEEP=[
 const keeperOf=g=>SHOPKEEP[g.keep]||SHOPKEEP[0];
 const SHOP_TOP=new Set(['life-orb','choice-band','choice-specs','choice-scarf','leftovers','focus-sash','assault-vest','weakness-policy','booster-energy','loaded-dice','heavy-duty-boots','eviolite','rocky-helmet','expert-belt']);
 const shopPrice=id=>id==='ability-patch'?8:id==='ability-capsule'||id==='potion'?4:id==='rare-candy'?2:SHOP_TOP.has(id)||(ITEMS[id]&&ITEMS[id].c==='x')?8:BOOST[id]?3:5;
-// 산 물건 받기: 회복약은 바로 파티 회복, 이상한사탕은 바로 쓰고, 도구는 지니게 하거나 가방에
+// 산 물건 받기: 회복약은 가방에(가방이 꽉 찼으면 바로 쓴다), 이상한사탕은 바로 쓰고, 도구는 지니게 하거나 가방에
 async function takeStock(id){
-  if(id==='potion'){ party.forEach(m=>{ m.hp=maxhp(m); m.st=null; }); whud(); say('회복약을 썼다. 파티 전원의 HP와 상태이상이 회복됐다!'); await wait(900); }
+  if(id==='potion'){ if(invAdd('potion')) say(`회복약을 가방에 넣었다. (${bag.inv.length}/${INV_MAX})`); else healParty(); await wait(900); }
   else if(id==='rare-candy'){ closeOv(); await useCandy(0,1); }
   else await placeItem(id);
 }
@@ -6996,6 +7016,14 @@ function useAbil(i){
   $('biDrop').onclick=()=>bagDrop(i,()=>bagItem(i));
 }
 // 가방에서 쓰는 도구: 이상한사탕(바로 쓰기)·다이스프(거다이맥스할 수 있는 포켓몬에게)
+function useBagPotion(i){
+  const hurt=party.some(m=>m.hp<maxhp(m)||m.st);
+  ov(`<div class="itm-h">${itemIcon('potion','iic big')}<div><h2>회복약</h2><p>${itemTxt('potion')}</p></div></div>
+    <div class="row-btns"><button class="btn" id="biBack" type="button">뒤로</button><button class="btn" id="biDrop" type="button">버리기</button><button class="btn go" id="biUse" type="button" ${hurt?'':'disabled'} title="${hurt?'':'모두 건강하다'}">쓰기</button></div>`,'bag');
+  $('biUse').onclick=()=>{ bag.inv.splice(i,1); healParty(); saveRun(); toast('파티 전원이 회복됐다!'); openBag(); };
+  $('biBack').onclick=()=>openBag();
+  $('biDrop').onclick=()=>bagDrop(i,()=>useBagPotion(i));
+}
 async function useBagCandy(i){ await useCandy(0,1,{take:()=>{ bag.inv.splice(i,1); saveRun(); },back:()=>openBag(),drop:()=>bagDrop(i,()=>useBagCandy(i))}); }
 function useSoup(i){
   const ok=m=>!!gmaxFor(m.id)&&!(m.gmax&&m.dx);
@@ -7246,7 +7274,7 @@ const HELP=[
     ['같이 싸우기',['배틀 중인 친구에게 걸어가 닿으면 그 배틀에 끼어든다. 최대 4대4.','쓰러뜨린 상대마다 각자 경험치 절반을 받는다. 영입은 자리 순서대로.']],
     ['보스',['방에 여럿이면 숲에 있는 모두가 보스 앞에 모여야 시작한다.','사람이 많을수록 보스가 <b>폭주</b>한다: HP가 사람 수만큼 늘고, 한 마리만 노리는 기술이 모두를 공격한다. 그만큼 경험치도 많다.']],
     ['교환',['멀티 버튼 → 방 사람 목록에서 교환 신청. 받은 사람은 같은 자리에서 교환 수락.','둘 다 교환 창에 들어오면 각자 보낼 포켓몬을 고른다. 상대를 기다리는 동안 취소하고 다시 고를 수 있다.','둘 다 고르면 정말 교환할지 확인 창이 뜬다. 둘 다 \'네\'를 누르면 교환된다. 지닌 도구도 같이 간다.']],
-    ['결투',['멀티 버튼 → 방 사람 목록에서 결투 신청. 받은 사람은 같은 자리에서 수락.','결투는 모두 HP·PP가 가득 찬 채로 싸우고, 끝나면 결투 전 상태로 돌아온다. 경험치나 영입은 없다.','도망 버튼 자리가 기권이 된다.']],
+    ['결투',['멀티 버튼 → 방 사람 목록에서 결투 신청. 받은 사람은 같은 자리에서 수락.','결투는 모두 Lv50, HP·PP가 가득 찬 채로 싸우고, 끝나면 결투 전 상태로 돌아온다. 경험치나 영입은 없다.','도망 버튼 자리가 기권이 된다.']],
   ]],
 ];
 function typeChart(){
@@ -7469,7 +7497,7 @@ function quitAsk(back){
   $('qNo').onclick=()=>(back||closeOv)();
   $('qYes').onclick=()=>{
     saveRun();
-    if(mp&&onFloor===floor){ const w=worldSnap(); floorMem.set(floor,w); if(isHost()) mpSend({t:'fsave',fl:floor,w}); onFloor=0; }  // 게임 오버처럼 층에서 빠진다
+    if(mp&&onFloor===floor){ const w=worldSnap(); floorMem.set(floor,w); if(isHost()) mpSend({t:'fsave',fl:floor,w}); } onFloor=0;  // 게임 오버처럼 층에서 빠진다
     leaveRoomNow(); showStart();
   };
 }

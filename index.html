@@ -1173,12 +1173,14 @@ function roomList(){
     </div>`;
   };
   ov(`<h2>멀티 · 방 ${mp.code}</h2><p>${mp.peers.length}명이 같이 하고 있어.</p>
+    <div class="row-btns"><button class="btn ${joinOpen()?'go':''}" id="joinTg" type="button" title="야생 배틀 중에 친구가 나에게 닿으면 끼어들 수 있는지">내 야생 배틀에 끼어들기: ${joinOpen()?'허용':'막음'}</button></div>
     <div class="list">${mp.peers.map(row).join('')}</div>
     <div class="row-btns"><button class="btn" id="lvNo" type="button">닫기</button><button class="btn" id="lvYes" type="button">방에서 나가기</button></div>`,'room');
   $('sheet').querySelectorAll('[data-pi]').forEach(b=>b.onclick=()=>peerView(b.dataset.pi));
   $('sheet').querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>kickAsk(b.dataset.k));
   $('sheet').querySelectorAll('[data-du]').forEach(b=>b.onclick=()=>duelAsk(b.dataset.du));
   $('sheet').querySelectorAll('[data-tr]').forEach(b=>b.onclick=()=>tradeAsk(b.dataset.tr));
+  $('joinTg').onclick=()=>{ store('kr-join',joinOpen()?'0':'1'); toast(joinOpen()?'이제 친구가 내 야생 배틀에 끼어들 수 있다':'이제 친구가 내 야생 배틀에 끼어들 수 없다'); roomList(); };
   $('lvNo').onclick=closeOv;
   $('lvYes').onclick=leaveAsk;
 }
@@ -1383,7 +1385,7 @@ function mpTick(t){
   if(mp.ws.readyState>1){ mp=null; mpTag(); mpLost(); toast('방 연결이 끊겼다. "멀티" 버튼으로 다시 들어갈 수 있다'); return; }
   // 아직 숲에 안 들어왔으면(시작 화면·대기·게임 오버) 층 0으로 보내서 안 보이게, 메뉴를 열어 두면 배틀 중처럼 취급
   const away=mode==='title'||mode==='wait'||mode==='over';
-  const m=lead()||{}, at=room?room.p:player, msg={t:'me',st:myState(),x:at.x,y:at.y,d:at.dir,rm:room?room.g.seed:0,id:m.id,sh:!!m.sh,fl:away?0:onFloor,fs:myFs,bt:(mode!=='world'&&mode!=='room')||!$('ov').hidden?1:0,bj:mode==='battle'&&!DUEL&&!KD&&SL.p.length<MAXS?(DBL?DBL.pl[coordI()].id:mp.id):0,inv:player.inv>0?1:0}, s=JSON.stringify(msg);
+  const m=lead()||{}, at=room?room.p:player, msg={t:'me',st:myState(),x:at.x,y:at.y,d:at.dir,rm:room?room.g.seed:0,id:m.id,sh:!!m.sh,fl:away?0:onFloor,fs:myFs,bt:(mode!=='world'&&mode!=='room')||!$('ov').hidden?1:0,bj:mode==='battle'&&!DUEL&&!KD&&!bt.closed&&SL.p.length<MAXS?(DBL?DBL.pl[coordI()].id:mp.id):0,inv:player.inv>0?1:0}, s=JSON.stringify(msg);
   if(s!==lastMe||t-lastMeT>1500){ lastMe=s; lastMeT=t; mpSend(msg); }
   const pm={t:'pty',l:ptyOut(),ld:Math.max(0,party.indexOf(lead()))}, ps=JSON.stringify(pm);
   if(ps!==lastPty||t-lastPtyT>10000){ lastPty=ps; lastPtyT=t; mpSend(pm); }
@@ -4420,6 +4422,7 @@ async function startBattle(w){
   const finalBoss=isBoss&&floor===15; if(finalBoss) enemy=makeEtmax(lv,w.sh);
   enemy.item=rollHeld(isBoss);  // 야생·보스가 지닌 도구
   bt={}; party.forEach(resetForms); renderField();
+  if(!isBoss&&!joinOpen()) bt.closed=1;  // 멀티 창에서 '끼어들기 막기'면 이 야생 배틀에는 아무도 못 끼어든다(끼어든 사람에게도 bt로 간다)
   if(isBoss&&!finalBoss){ bossPlan(enemy); bossBuild(enemy); }
   if(!REDUCED){ const wp=$('wipe'); for(let k=0;k<2;k++){ wp.style.background='#fff'; await wp.animate([{opacity:0},{opacity:.9},{opacity:0}],{duration:180}).finished; } wp.style.background='#000'; }
   await wipe(true,220);
@@ -4485,6 +4488,7 @@ async function runTurn(pc){
       return endBattle('run');
     }
     say(`${plName(si)} 님이 도망쳤다!`); await wait(900);
+    (bt.ran||(bt.ran=[])).push(DBL.pl[si].id);  // 남은 화면들이 같이 기억한다(진행자가 바뀌어도)
     recall(slotEl('p',si)); slotHud('p',si).style.visibility='hidden'; SL.p[si]=null;
     for(const e of SL.e) if(e){ const ve=V(e); if(ve.trap&&ve.trap.by===p) delete ve.trap; if(ve.inf===p) delete ve.inf; }
     dblLeft(DBL.pl[si].id);
@@ -5040,7 +5044,7 @@ async function dblJoined(m){
     return;
   }
   mp.joining=null;
-  if(!m.ok){ setMode(fieldMode()); say('지금은 그 배틀에 끼어들 수 없다.'); return; }
+  if(!m.ok){ setMode(fieldMode()); player.inv=1500; say(m.why==='closed'?`${peerName(m.from)} 님이 배틀에 끼어들기를 막아 두었다.`:m.why==='ran'?'도망쳐 나온 배틀에는 다시 끼어들 수 없다.':'지금은 그 배틀에 끼어들 수 없다.'); return; }
   await nStart(m.st,false);
 }
 // 받은 배틀 상태로 여럿이 배틀을 시작한다. boss=true면 처음부터 모두 함께(보스), 아니면 진행 중인 배틀에 끼어든다
@@ -5085,9 +5089,13 @@ async function nStart(st,boss){
   dblResume();
 }
 /* --- 진행자: 끼어들기 요청을 받으면 턴 사이에 받아들인다 --- */
-const canTake=()=>SL.p.length<MAXS&&(!DBL||coordI()===myI);
+const canTake=()=>SL.p.length<MAXS&&(!DBL||coordI()===myI)&&!bt.closed;
+// 내 야생 배틀에 다른 사람이 끼어들 수 있나 (멀티 창의 버튼, 기기에 기억)
+const joinOpen=()=>store('kr-join')!=='0';
 function dblOnReq(m){
-  const no=()=>mpSend({t:'jok',to:m.from,ok:false});
+  const no=why=>mpSend({t:'jok',to:m.from,ok:false,why});
+  if(mode==='battle'&&bt.closed) return no('closed');
+  if(mode==='battle'&&bt.ran&&bt.ran.includes(m.from)) return no('ran');  // 이 배틀에서 도망친 사람은 다시 못 들어온다
   if(mode!=='battle'||bt.jreq||!canTake()) return no();
   bt.jreq=m.from;
   const tryIt=()=>{
@@ -7276,7 +7284,7 @@ const HELP=[
   ['상성표',null],
   ['멀티',[
     ['방',['멀티 버튼 → 새 방 만들기(숫자 4자리 코드) 또는 코드를 넣고 들어가기. 최대 4명.','같은 방이면 같은 숲을 함께 탐험한다. 층은 각자 오갈 수 있다.','친구 포켓몬 머리 위에 지금 하는 일(전투 중·가방 보는 중 등)이 뜬다.']],
-    ['같이 싸우기',['배틀 중인 친구에게 걸어가 닿으면 그 배틀에 끼어든다. 최대 4대4.','쓰러뜨린 상대마다 각자 경험치 절반을 받는다. 영입은 자리 순서대로.']],
+    ['같이 싸우기',['배틀 중인 친구에게 걸어가 닿으면 그 배틀에 끼어든다. 최대 4대4.','멀티 버튼 창의 <b>내 야생 배틀에 끼어들기</b> 버튼으로 친구가 내 야생 배틀에 끼어들 수 있게 할지 막을지 고른다.','야생 배틀에서 도망친 사람은 그 배틀에 다시 끼어들 수 없다.','쓰러뜨린 상대마다 각자 경험치 절반을 받는다. 영입은 자리 순서대로.']],
     ['보스',['방에 여럿이면 숲에 있는 모두가 보스 앞에 모여야 시작한다.','사람이 많을수록 보스가 <b>폭주</b>한다: HP가 사람 수만큼 늘고, 한 마리만 노리는 기술이 모두를 공격한다. 그만큼 경험치도 많다.']],
     ['교환',['멀티 버튼 → 방 사람 목록에서 교환 신청. 받은 사람은 같은 자리에서 교환 수락.','둘 다 교환 창에 들어오면 각자 보낼 포켓몬을 고른다. 상대를 기다리는 동안 취소하고 다시 고를 수 있다.','둘 다 고르면 정말 교환할지 확인 창이 뜬다. 둘 다 \'네\'를 누르면 교환된다. 지닌 도구도 같이 간다.']],
     ['결투',['멀티 버튼 → 방 사람 목록에서 결투 신청. 받은 사람은 같은 자리에서 수락.','결투는 모두 Lv50, HP·PP가 가득 찬 채로 싸우고, 끝나면 결투 전 상태로 돌아온다. 경험치나 영입은 없다.','도망 버튼 자리가 기권이 된다.']],

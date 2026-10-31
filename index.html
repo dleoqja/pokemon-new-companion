@@ -2665,7 +2665,7 @@ async function secondaries(x,y,mid){
 }
 function pickSwitch(kind){
   return new Promise(res=>{
-    ov(`<h2>${kind==='forced'?'다음 포켓몬을 골라라':'누구와 교체할까?'}</h2><div class="list">${party.map((m,i)=>pmHTML(m,i,m.hp<=0||i===act||onField().includes(m),i===act)).join('')}</div>`);
+    ov(`<h2>${kind==='forced'?'다음 포켓몬을 골라라':'누구와 교체할까?'}</h2><div class="list">${party.map((m,i)=>pmHTML(m,i,m.hp<=0||(i===act&&kind!=='forced')||onField().includes(m),i===act)).join('')}</div>`);
     $('sheet').querySelectorAll('.pm').forEach(b=>b.onclick=()=>{ closeOv(); res(+b.dataset.i); });
   });
 }
@@ -3657,7 +3657,7 @@ async function forceOut(m,by){
     if(DBL){ leaveField(party[i]); setIllusion(party[i]); dblSend({t:'dsw',mon:monOut(party[i])}); }
     say(`${W} 날아가 버렸다!`); await wait(700); await switchIn(i); return true;
   }
-  if(DBL&&SL.p.includes(m)){ await dblAllySwitch(`${W} 날아가 버렸다!`,SL.p.indexOf(m)); return true; }
+  if(DBL&&SL.p.includes(m)) return dblAllySwitch(`${W} 날아가 버렸다!`,SL.p.indexOf(m));  // 동료에게 교체할 포켓몬이 없으면(none) 실패, 동료 화면과 같게
   return false;
 }
 // 배턴터치·꼬리자르기: 교체하면서 넘길 것(keys)을 다음 포켓몬에게
@@ -3668,7 +3668,10 @@ async function passOut(x,keys,msg){
   const n=SL[side][slot]; if(n&&n!==x&&n.hp>0){ Object.assign(V(n),keep); refreshHud(n); }
 }
 // 교체할 포켓몬이 있는지 (동료의 파티는 내 화면에서 모르니 있다고 본다)
-const canPivot=m=>DUEL?teamOf(m).some(q=>q.hp>0&&!onField().includes(q)):party.includes(m)?party.some(q=>q.hp>0&&!onField().includes(q)):!!(DBL&&SL.p.includes(m));
+// 동료 포켓몬은 동료가 이번 턴 명령과 같이 보낸 교체할 수 있는 수(DBL.bn)로 판단한다. 안 그러면 한 마리뿐인 동료가 바톤터치·치유소원·탈출버튼을 쓸 때
+// 동료 화면은 실패, 내 화면은 교체를 기다려 끝없이 멈춘다
+const benchN=()=>party.filter(q=>q.hp>0&&!onField().includes(q)).length;
+const canPivot=m=>DUEL?teamOf(m).some(q=>q.hp>0&&!onField().includes(q)):party.includes(m)?benchN()>0:!!(DBL&&SL.p.includes(m)&&(DBL.bn&&DBL.bn[SL.p.indexOf(m)]!=null?DBL.bn[SL.p.indexOf(m)]:1)>0);
 // 다른 기술을 불러서 쓴다 (손가락흔들기·잠꼬대 등)
 async function callMove(x,mid,pick){ if(!mid||!MV[mid]) return; say(`${josa(who(x),'은/는')} ${josa(MV[mid].n,'을/를')} 썼다!`); await wait(600); await useMove(x,mid,pick,true); }
 const callPool=()=>Object.keys(MV).map(Number).filter(i=>MVX[i]&&!NOCALL.has(MVX[i].id)&&i!==STRUGGLE&&i<10000&&i!==744&&i!==795);
@@ -5260,7 +5263,7 @@ async function dblTurn(a){
   busy=true; DBL.inTurn=true; renderCmd();
   let c=null;
   if(me){
-    c={mv:a.mv,tg:a.tgt||null,run:a.run?1:0,mega:!!(bt.armM&&canMega(me)&&!bt.pMega),dmax:!!(bt.armD&&canDmax(me))};
+    c={mv:a.mv,tg:a.tgt||null,run:a.run?1:0,mega:!!(bt.armM&&canMega(me)&&!bt.pMega),dmax:!!(bt.armD&&canDmax(me)),bn:benchN()};
     if(a.sw!=null){ const n=party[a.sw]; leaveField(n); setIllusion(n); c.sw=1; c.mon=monOut(n); }
   }
   // 진행자에게 명령을 보내고 진행자가 모아서 돌려준 턴(tf)을 기다린다. 진행자가 나가면 다음 사람이 이어받는다
@@ -5293,6 +5296,7 @@ async function dblTurn(a){
   const pc=[];
   for(let i=0;i<SL.p.length;i++){
     const m=SL.p[i], k=tf.cmds[i]; if(!m||!k) continue;
+    if(k.bn!=null) (DBL.bn||(DBL.bn=[]))[i]=k.bn;
     pc.push({mon:m,mv:k.mv,run:k.run,tgt:slotMon(k.tg),sw:i===myI?(a.sw!=null?a.sw:null):(k.sw?1:null),swMon:i===myI?null:k.mon||null,mega:k.mega,dmax:k.dmax});
   }
   await runTurn(pc);
@@ -5324,9 +5328,10 @@ async function dblAllyIn(mon,i){
 // 유턴·탈출버튼 등으로 동료 포켓몬이 빠질 때: 그 동료가 고른 포켓몬을 받아서 넣는다
 async function dblAllySwitch(msg,i){
   const r=await dblRecv('dsw',i);
-  if(!r||r.none) return;
+  if(!r||r.none) return false;
   say(msg); await wait(500);
   await dblAllyIn(r.mon,i);
+  return true;
 }
 // 내 포켓몬이 중간에 빠질 때: 고른 포켓몬을 동료들에게도 알린다
 async function dblMySwitch(msg,bench){
@@ -5345,7 +5350,7 @@ async function dblAfterFaint(){
 async function dblReplace(){
   const my=DBL.pl[myI], ins=[]; let mine=null;
   if(!SL.p[myI]&&!my.out){
-    if(party.some(x=>x.hp>0)){
+    if(benchN()>0){  // 고를 수 있는 포켓몬이 있을 때만 (없는데 고르는 창을 띄우면 끝없이 기다린다)
       busy=false; mine=await pickSwitch('forced'); busy=true;
       leaveField(party[mine]); setIllusion(party[mine]); dblSend({t:'dsw',mon:monOut(party[mine])});
     }else{ my.out=true; dblSend({t:'dsw',none:1}); if(SL.p.some(Boolean)){ say('내 포켓몬이 모두 쓰러졌다… 동료의 배틀을 지켜본다.'); await wait(1000); } }
